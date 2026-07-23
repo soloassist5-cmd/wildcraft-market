@@ -811,8 +811,8 @@
         async function getStaffOrders() {
             return apiCall('getStaffOrders');
         }
-        async function updateOrderStatus(orderId, status, actor, role) {
-            return apiCall('updateOrderStatus', 'orders', { actor, status, role }, orderId);
+        async function updateOrderStatusDB(orderId, status, actor) {
+            return apiCall('updateOrderStatus', 'orders', { actor, status }, orderId);
         }
         async function archiveOrders() {
             return apiCall('archiveOrders');
@@ -1155,7 +1155,7 @@
         });
 
         // ============================================================
-        // ОБНОВЛЕНИЕ СТАТУСА ЗАКАЗА (НОВАЯ ФУНКЦИЯ)
+        // ОБНОВЛЕНИЕ СТАТУСА ЗАКАЗА (БЕЗОПАСНАЯ ВЕРСИЯ)
         // ============================================================
         window.updateOrderStatus = async function(orderId, status, btnEl) {
             const user = getCurrentUser();
@@ -1164,15 +1164,41 @@
                 return;
             }
 
-            const btn = btnEl || (window.event && window.event.target && window.event.target.closest('button'));
-            const originalHtml = btn ? btn.innerHTML : null;
-            if (btn) {
+            // БЕЗОПАСНОЕ ПОЛУЧЕНИЕ КНОПКИ
+            let btn = null;
+            
+            if (btnEl && typeof btnEl === 'object' && btnEl.tagName === 'BUTTON') {
+                btn = btnEl;
+            } else if (btnEl && typeof btnEl === 'string') {
+                btn = document.getElementById(btnEl);
+                if (!btn) {
+                    btn = document.querySelector(`button[data-order-id="${orderId}"]`);
+                }
+            }
+            
+            if (!btn) {
+                const evt = window.event;
+                if (evt && evt.target) {
+                    btn = evt.target.closest('button');
+                }
+            }
+            
+            if (!btn) {
+                const buttons = document.querySelectorAll(`button[onclick*="updateOrderStatus('${orderId}']`);
+                if (buttons.length > 0) {
+                    btn = buttons[0];
+                }
+            }
+
+            let originalHtml = null;
+            if (btn && btn.tagName === 'BUTTON') {
+                originalHtml = btn.innerHTML;
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Обновляем...';
             }
 
             try {
-                const result = await updateOrderStatus(orderId, status, user.username, user.role);
+                const result = await updateOrderStatusDB(orderId, status, user.username);
                 if (!result || result.error) {
                     throw new Error((result && result.error) || 'Не удалось обновить статус');
                 }
@@ -1181,16 +1207,17 @@
                     'ready_for_courier': 'Готов к передаче курьеру',
                     'in_transit': 'В пути',
                     'ready_for_pickup': 'Готов к выдаче',
-                    'completed': 'Выдан'
+                    'completed': 'Выдан',
+                    'cancelled': 'Отменён'
                 };
                 showToast('📦 Статус заказа обновлён: ' + (statusLabels[status] || status), 'success');
                 renderUI();
             } catch (error) {
                 console.error('Ошибка обновления статуса заказа:', error);
                 showToast('❌ Ошибка: ' + error.message, 'error');
-                if (btn) {
+                if (btn && btn.tagName === 'BUTTON') {
                     btn.disabled = false;
-                    btn.innerHTML = originalHtml;
+                    btn.innerHTML = originalHtml || '↻';
                 }
             }
         };
@@ -1208,10 +1235,12 @@
                     '?\n\nТовары будут возвращены на склад.'))
                 return;
             try {
-                const result = await updateOrderStatus(orderId, 'cancelled', user.username, user.role);
-                if (result.success) {
+                const result = await updateOrderStatusDB(orderId, 'cancelled', user.username);
+                if (result && result.success) {
                     showToast('✅ Заказ отменён! Товары возвращены на склад.', 'success');
                     renderUI();
+                } else if (result && result.error) {
+                    throw new Error(result.error);
                 }
             } catch (error) {
                 if (error.message.includes('15 минут')) {
@@ -1411,93 +1440,93 @@
                 document.getElementById('sellerProfileTitle').textContent = '👤 Профиль: ' + username;
 
                 let html = `
-                        <div class="seller-profile-card">
-                            <div class="stat-grid">
-                                <div class="stat-item">
-                                    <div class="value">${data.stats.totalProducts}</div>
-                                    <div class="label">Товаров</div>
-                                </div>
-                                <div class="stat-item">
-                                    <div class="value">${data.stats.totalOrders}</div>
-                                    <div class="label">Заказов</div>
-                                </div>
-                                <div class="stat-item">
-                                    <div class="value">${data.stats.totalEarned.toFixed(2)} АР</div>
-                                    <div class="label">Заработано</div>
-                                </div>
-                                <div class="stat-item">
-                                    <div class="value">${data.balance.toFixed(2)} АР</div>
-                                    <div class="label">Баланс</div>
-                                </div>
+                    <div class="seller-profile-card">
+                        <div class="stat-grid">
+                            <div class="stat-item">
+                                <div class="value">${data.stats.totalProducts}</div>
+                                <div class="label">Товаров</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="value">${data.stats.totalOrders}</div>
+                                <div class="label">Заказов</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="value">${data.stats.totalEarned.toFixed(2)} АР</div>
+                                <div class="label">Заработано</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="value">${data.balance.toFixed(2)} АР</div>
+                                <div class="label">Баланс</div>
                             </div>
                         </div>
-                    `;
+                    </div>
+                `;
 
                 if (data.shop) {
                     html += `
-                            <div class="profile-card">
-                                <div class="card-title">🏪 ${data.shop.name}</div>
-                                <p>${data.shop.description || 'Без описания'}</p>
-                                <span class="badge ${data.shop.approved ? 'badge-success' : 'badge-warning'}">${data.shop.approved ? '✅ Одобрен' : '⏳ На проверке'}</span>
-                            </div>
-                        `;
+                        <div class="profile-card">
+                            <div class="card-title">🏪 ${data.shop.name}</div>
+                            <p>${data.shop.description || 'Без описания'}</p>
+                            <span class="badge ${data.shop.approved ? 'badge-success' : 'badge-warning'}">${data.shop.approved ? '✅ Одобрен' : '⏳ На проверке'}</span>
+                        </div>
+                    `;
                 }
 
                 if (data.products.length > 0) {
                     html += `
-                            <div class="profile-card">
-                                <div class="card-title">📦 Товары (${data.products.length})</div>
-                                <div class="my-products-grid">
-                                    ${data.products.map(p => `
-                                            <div class="my-product-item">
-                                                <div class="icon">${p.icon || '📦'}</div>
-                                                <div class="name">${p.name}</div>
-                                                <div class="price">🟣 ${p.price_ar.toFixed(2)} АР</div>
-                                                <div class="stock">📦 ${p.stock}</div>
-                                                <div class="status-badge ${p.status === 'approved' ? 'badge-success' : p.status === 'pending' ? 'badge-warning' : 'badge-danger'}">${p.status === 'approved' ? '✅ Опубликован' : p.status === 'pending' ? '⏳ На проверке' : '❌ Отклонён'}</div>
-                                                <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}', true)">🗑️</button>
-                                            </div>
-                                        `).join('')}
-                                </div>
+                        <div class="profile-card">
+                            <div class="card-title">📦 Товары (${data.products.length})</div>
+                            <div class="my-products-grid">
+                                ${data.products.map(p => `
+                                    <div class="my-product-item">
+                                        <div class="icon">${p.icon || '📦'}</div>
+                                        <div class="name">${p.name}</div>
+                                        <div class="price">🟣 ${p.price_ar.toFixed(2)} АР</div>
+                                        <div class="stock">📦 ${p.stock}</div>
+                                        <div class="status-badge ${p.status === 'approved' ? 'badge-success' : p.status === 'pending' ? 'badge-warning' : 'badge-danger'}">${p.status === 'approved' ? '✅ Опубликован' : p.status === 'pending' ? '⏳ На проверке' : '❌ Отклонён'}</div>
+                                        <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}', true)">🗑️</button>
+                                    </div>
+                                `).join('')}
                             </div>
-                        `;
+                        </div>
+                    `;
                 }
 
                 if (data.orders.length > 0) {
                     html += `
-                            <div class="profile-card">
-                                <div class="card-title">📦 Заказы (${data.orders.length})</div>
-                                ${data.orders.slice(0, 20).map(o => `
-                                        <div class="order-item">
-                                            <div class="header"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at).toLocaleString()}</span></div>
-                                            <div class="buyer">👤 ${o.buyer}</div>
-                                            <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
-                                            <div class="pickup">📍 ${o.pickup}</div>
-                                            <div class="total">${o.total_ar.toFixed(2)} АР</div>
-                                            <span class="badge ${ORDER_STATUSES[o.status]?.color || 'badge-warning'}">${ORDER_STATUSES[o.status]?.label || o.status}</span>
-                                        </div>
-                                    `).join('')}
-                                ${data.orders.length > 20 ? `<p style="color:var(--text-secondary);font-size:13px;">... и ещё ${data.orders.length - 20} заказов</p>` : ''}
-                            </div>
-                        `;
+                        <div class="profile-card">
+                            <div class="card-title">📦 Заказы (${data.orders.length})</div>
+                            ${data.orders.slice(0, 20).map(o => `
+                                <div class="order-item">
+                                    <div class="header"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at).toLocaleString()}</span></div>
+                                    <div class="buyer">👤 ${o.buyer}</div>
+                                    <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
+                                    <div class="pickup">📍 ${o.pickup}</div>
+                                    <div class="total">${o.total_ar.toFixed(2)} АР</div>
+                                    <span class="badge ${ORDER_STATUSES[o.status]?.color || 'badge-warning'}">${ORDER_STATUSES[o.status]?.label || o.status}</span>
+                                </div>
+                            `).join('')}
+                            ${data.orders.length > 20 ? `<p style="color:var(--text-secondary);font-size:13px;">... и ещё ${data.orders.length - 20} заказов</p>` : ''}
+                        </div>
+                    `;
                 }
 
                 if (data.transactions.length > 0) {
                     html += `
-                            <details class="tx-log" open>
-                                <summary>💰 Транзакции (${data.transactions.length})</summary>
-                                <div class="tx-list">${renderTransactionRows(data.transactions)}</div>
-                            </details>
-                        `;
+                        <details class="tx-log" open>
+                            <summary>💰 Транзакции (${data.transactions.length})</summary>
+                            <div class="tx-list">${renderTransactionRows(data.transactions)}</div>
+                        </details>
+                    `;
                 }
 
                 html += `
-                        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
-                            <button class="btn btn-danger" onclick="adminResetBalance('${username}')"><i class="fas fa-ban"></i> Обнулить баланс</button>
-                            <button class="btn btn-danger" onclick="toggleBlockUser('${username}')"><i class="fas fa-lock"></i> Блокировать</button>
-                            <button class="btn btn-danger" onclick="deleteSeller('${username}')"><i class="fas fa-user-slash"></i> Удалить продавца</button>
-                        </div>
-                    `;
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
+                        <button class="btn btn-danger" onclick="adminResetBalance('${username}')"><i class="fas fa-ban"></i> Обнулить баланс</button>
+                        <button class="btn btn-danger" onclick="toggleBlockUser('${username}')"><i class="fas fa-lock"></i> Блокировать</button>
+                        <button class="btn btn-danger" onclick="deleteSeller('${username}')"><i class="fas fa-user-slash"></i> Удалить продавца</button>
+                    </div>
+                `;
 
                 content.innerHTML = html;
                 modal.classList.add('open');
@@ -1523,59 +1552,59 @@
                 document.getElementById('courierProfileTitle').textContent = '🚚 Профиль курьера: ' + username;
 
                 let html = `
-                        <div class="seller-profile-card">
-                            <div class="courier-profile-stats">
-                                <div class="stat-item">
-                                    <div class="value">${data.stats.totalDeliveries}</div>
-                                    <div class="label">Доставок</div>
-                                </div>
-                                <div class="stat-item">
-                                    <div class="value">${data.stats.totalCommission.toFixed(2)} АР</div>
-                                    <div class="label">Заработано на доставках</div>
-                                </div>
-                                <div class="stat-item">
-                                    <div class="value">${data.balance.toFixed(2)} АР</div>
-                                    <div class="label">Текущий баланс</div>
-                                </div>
+                    <div class="seller-profile-card">
+                        <div class="courier-profile-stats">
+                            <div class="stat-item">
+                                <div class="value">${data.stats.totalDeliveries}</div>
+                                <div class="label">Доставок</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="value">${data.stats.totalCommission.toFixed(2)} АР</div>
+                                <div class="label">Заработано на доставках</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="value">${data.balance.toFixed(2)} АР</div>
+                                <div class="label">Текущий баланс</div>
                             </div>
                         </div>
-                    `;
+                    </div>
+                `;
 
                 if (data.orders.length > 0) {
                     html += `
-                            <div class="profile-card">
-                                <div class="card-title">📦 Выполненные доставки (${data.orders.length})</div>
-                                ${data.orders.slice(0, 20).map(o => `
-                                        <div class="order-item">
-                                            <div class="header"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at).toLocaleString()}</span></div>
-                                            <div>👤 ${o.buyer} → 🏪 ${o.seller}</div>
-                                            <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
-                                            <div class="pickup">📍 ${o.pickup}</div>
-                                            <div class="total">${o.total_ar.toFixed(2)} АР</div>
-                                            <span class="badge ${ORDER_STATUSES[o.status]?.color || 'badge-warning'}">${ORDER_STATUSES[o.status]?.label || o.status}</span>
-                                        </div>
-                                    `).join('')}
-                                ${data.orders.length > 20 ? `<p style="color:var(--text-secondary);font-size:13px;">... и ещё ${data.orders.length - 20} доставок</p>` : ''}
-                            </div>
-                        `;
+                        <div class="profile-card">
+                            <div class="card-title">📦 Выполненные доставки (${data.orders.length})</div>
+                            ${data.orders.slice(0, 20).map(o => `
+                                <div class="order-item">
+                                    <div class="header"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at).toLocaleString()}</span></div>
+                                    <div>👤 ${o.buyer} → 🏪 ${o.seller}</div>
+                                    <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
+                                    <div class="pickup">📍 ${o.pickup}</div>
+                                    <div class="total">${o.total_ar.toFixed(2)} АР</div>
+                                    <span class="badge ${ORDER_STATUSES[o.status]?.color || 'badge-warning'}">${ORDER_STATUSES[o.status]?.label || o.status}</span>
+                                </div>
+                            `).join('')}
+                            ${data.orders.length > 20 ? `<p style="color:var(--text-secondary);font-size:13px;">... и ещё ${data.orders.length - 20} доставок</p>` : ''}
+                        </div>
+                    `;
                 }
 
                 if (data.transactions.length > 0) {
                     html += `
-                            <details class="tx-log" open>
-                                <summary>💰 Транзакции (${data.transactions.length})</summary>
-                                <div class="tx-list">${renderTransactionRows(data.transactions)}</div>
-                            </details>
-                        `;
+                        <details class="tx-log" open>
+                            <summary>💰 Транзакции (${data.transactions.length})</summary>
+                            <div class="tx-list">${renderTransactionRows(data.transactions)}</div>
+                        </details>
+                    `;
                 }
 
                 html += `
-                        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
-                            <button class="btn btn-danger" onclick="adminResetBalance('${username}')"><i class="fas fa-ban"></i> Обнулить баланс</button>
-                            <button class="btn btn-danger" onclick="toggleBlockUser('${username}')"><i class="fas fa-lock"></i> Блокировать</button>
-                            <button class="btn btn-danger" onclick="deleteCourier('${username}')"><i class="fas fa-user-slash"></i> Удалить курьера</button>
-                        </div>
-                    `;
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
+                        <button class="btn btn-danger" onclick="adminResetBalance('${username}')"><i class="fas fa-ban"></i> Обнулить баланс</button>
+                        <button class="btn btn-danger" onclick="toggleBlockUser('${username}')"><i class="fas fa-lock"></i> Блокировать</button>
+                        <button class="btn btn-danger" onclick="deleteCourier('${username}')"><i class="fas fa-user-slash"></i> Удалить курьера</button>
+                    </div>
+                `;
 
                 content.innerHTML = html;
                 modal.classList.add('open');
@@ -1640,15 +1669,15 @@
                     return;
                 }
                 container.innerHTML = sessions.map(s => `
-                        <div class="session-item">
-                            <div class="session-info">
-                                <span class="ip">${s.ip || 'unknown'}</span>
-                                <span style="color:var(--text-secondary);font-size:12px;">${new Date(s.created_at).toLocaleString()}</span>
-                                ${s.token === adminSessionToken ? ' <span class="badge badge-success">Текущая</span>' : ''}
-                            </div>
-                            ${s.token !== adminSessionToken ? `<button class="btn btn-danger btn-sm" onclick="revokeSession('${s.token}')">Завершить</button>` : ''}
+                    <div class="session-item">
+                        <div class="session-info">
+                            <span class="ip">${s.ip || 'unknown'}</span>
+                            <span style="color:var(--text-secondary);font-size:12px;">${new Date(s.created_at).toLocaleString()}</span>
+                            ${s.token === adminSessionToken ? ' <span class="badge badge-success">Текущая</span>' : ''}
                         </div>
-                    `).join('');
+                        ${s.token !== adminSessionToken ? `<button class="btn btn-danger btn-sm" onclick="revokeSession('${s.token}')">Завершить</button>` : ''}
+                    </div>
+                `).join('');
             } catch (error) {
                 console.error('Ошибка загрузки сессий:', error);
             }
@@ -1675,46 +1704,46 @@
             const user = getCurrentUser();
             if (!user || user.role !== 'courier') {
                 container.innerHTML = `
-                        <div class="empty-state">
-                            <i class="fas fa-truck"></i>
-                            <h3>Только для курьеров</h3>
-                            <p>Войдите как курьер, чтобы видеть заказы для доставки</p>
-                        </div>
-                    `;
+                    <div class="empty-state">
+                        <i class="fas fa-truck"></i>
+                        <h3>Только для курьеров</h3>
+                        <p>Войдите как курьер, чтобы видеть заказы для доставки</p>
+                    </div>
+                `;
                 return;
             }
             try {
                 const data = await getCourierOrders();
                 if (data.total === 0) {
                     container.innerHTML = `
-                            <div class="empty-state">
-                                <i class="fas fa-truck"></i>
-                                <h3>Нет заказов для доставки</h3>
-                                <p>Все заказы уже в пути или доставлены</p>
-                            </div>
-                        `;
+                        <div class="empty-state">
+                            <i class="fas fa-truck"></i>
+                            <h3>Нет заказов для доставки</h3>
+                            <p>Все заказы уже в пути или доставлены</p>
+                        </div>
+                    `;
                     return;
                 }
                 let html = `<p style="color:var(--text-secondary);margin-bottom:16px;">📦 Заказов для доставки: ${data.total}</p>`;
                 for (const [pickup, orders] of Object.entries(data.grouped)) {
                     html += `
-                            <div class="courier-order-group">
-                                <div class="pickup-title">📍 Пункт выдачи: ${pickup}</div>
-                                ${orders.map(o => `
-                                        <div class="courier-order-item">
-                                            <div>
-                                                <div><strong>#${o.id}</strong> · 👤 ${o.buyer} → 🏪 ${o.seller}</div>
-                                                <div style="font-size:12px;color:var(--text-secondary);">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
-                                                <div style="font-size:12px;color:var(--text-secondary);">💰 ${o.total_ar.toFixed(2)} АР · ${o.payment_method === 'balance' ? '💳 Оплачено' : '💵 При получении'}</div>
-                                                <div style="font-size:12px;color:var(--accent);"><i class="fas fa-map-marker-alt"></i> Доставить в: ${o.pickup}</div>
-                                            </div>
-                                            <button class="btn btn-warning btn-sm" onclick="updateOrderStatus('${o.id}', 'in_transit', this)">
-                                                <i class="fas fa-truck"></i> Взять в доставку
-                                            </button>
-                                        </div>
-                                    `).join('')}
-                            </div>
-                        `;
+                        <div class="courier-order-group">
+                            <div class="pickup-title">📍 Пункт выдачи: ${pickup}</div>
+                            ${orders.map(o => `
+                                <div class="courier-order-item">
+                                    <div>
+                                        <div><strong>#${o.id}</strong> · 👤 ${o.buyer} → 🏪 ${o.seller}</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);">💰 ${o.total_ar.toFixed(2)} АР · ${o.payment_method === 'balance' ? '💳 Оплачено' : '💵 При получении'}</div>
+                                        <div style="font-size:12px;color:var(--accent);"><i class="fas fa-map-marker-alt"></i> Доставить в: ${o.pickup}</div>
+                                    </div>
+                                    <button class="btn btn-warning btn-sm" onclick="window.updateOrderStatus('${o.id}', 'in_transit', this)">
+                                        <i class="fas fa-truck"></i> Взять в доставку
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
                 }
                 container.innerHTML = html;
             } catch (error) {
@@ -1732,46 +1761,46 @@
             const user = getCurrentUser();
             if (!user || (user.role !== 'staff' && user.role !== 'admin')) {
                 container.innerHTML = `
-                        <div class="empty-state">
-                            <i class="fas fa-warehouse"></i>
-                            <h3>Только для сотрудников ПВЗ</h3>
-                            <p>Войдите как сотрудник ПВЗ, чтобы видеть заказы для выдачи</p>
-                        </div>
-                    `;
+                    <div class="empty-state">
+                        <i class="fas fa-warehouse"></i>
+                        <h3>Только для сотрудников ПВЗ</h3>
+                        <p>Войдите как сотрудник ПВЗ, чтобы видеть заказы для выдачи</p>
+                    </div>
+                `;
                 return;
             }
             try {
                 const data = await getStaffOrders();
                 if (data.total === 0) {
                     container.innerHTML = `
-                            <div class="empty-state">
-                                <i class="fas fa-warehouse"></i>
-                                <h3>Нет заказов для выдачи</h3>
-                                <p>Все заказы уже выданы или ещё не доставлены в ПВЗ</p>
-                            </div>
-                        `;
+                        <div class="empty-state">
+                            <i class="fas fa-warehouse"></i>
+                            <h3>Нет заказов для выдачи</h3>
+                            <p>Все заказы уже выданы или ещё не доставлены в ПВЗ</p>
+                        </div>
+                    `;
                     return;
                 }
                 let html = `<p style="color:var(--text-secondary);margin-bottom:16px;">📦 Заказов для выдачи: ${data.total}</p>`;
                 for (const [pickup, orders] of Object.entries(data.grouped)) {
                     html += `
-                            <div class="staff-order-group">
-                                <div class="pickup-title">📍 Пункт выдачи: ${pickup}</div>
-                                ${orders.map(o => `
-                                        <div class="staff-order-item-inner">
-                                            <div>
-                                                <div><strong>#${o.id}</strong> · 👤 ${o.buyer} → 🏪 ${o.seller}</div>
-                                                <div style="font-size:12px;color:var(--text-secondary);">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
-                                                <div style="font-size:12px;color:var(--text-secondary);">💰 ${o.total_ar.toFixed(2)} АР · ${o.payment_method === 'balance' ? '💳 Оплачено' : '💵 Оплата при получении'}</div>
-                                                <div style="font-size:12px;color:var(--secondary);"><i class="fas fa-box"></i> Готов к выдаче</div>
-                                            </div>
-                                            <button class="btn btn-success btn-sm" onclick="updateOrderStatus('${o.id}', 'completed', this)">
-                                                <i class="fas fa-hand-holding"></i> Выдать заказ
-                                            </button>
-                                        </div>
-                                    `).join('')}
-                            </div>
-                        `;
+                        <div class="staff-order-group">
+                            <div class="pickup-title">📍 Пункт выдачи: ${pickup}</div>
+                            ${orders.map(o => `
+                                <div class="staff-order-item-inner">
+                                    <div>
+                                        <div><strong>#${o.id}</strong> · 👤 ${o.buyer} → 🏪 ${o.seller}</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);">💰 ${o.total_ar.toFixed(2)} АР · ${o.payment_method === 'balance' ? '💳 Оплачено' : '💵 Оплата при получении'}</div>
+                                        <div style="font-size:12px;color:var(--secondary);"><i class="fas fa-box"></i> Готов к выдаче</div>
+                                    </div>
+                                    <button class="btn btn-success btn-sm" onclick="window.updateOrderStatus('${o.id}', 'completed', this)">
+                                        <i class="fas fa-hand-holding"></i> Выдать заказ
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
                 }
                 container.innerHTML = html;
             } catch (error) {
@@ -1800,18 +1829,18 @@
                     content.innerHTML = '<p style="color:var(--text-secondary);">Архив пуст</p>';
                 } else {
                     content.innerHTML = archiveData.slice().reverse().map(o => `
-                            <div class="order-item">
-                                <div class="header"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at).toLocaleString()}</span></div>
-                                <div>👤 ${o.buyer} → 🏪 ${o.seller}</div>
-                                <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
-                                <div class="pickup">📍 ${o.pickup}</div>
-                                <div class="flex-between" style="margin-top:6px;">
-                                    <span class="total">${o.total_ar.toFixed(2)} АР</span>
-                                    <span class="badge ${ORDER_STATUSES[o.status]?.color || 'badge-warning'}">${ORDER_STATUSES[o.status]?.label || o.status}</span>
-                                </div>
-                                <div style="font-size:11px;color:var(--text-secondary);">Архивирован: ${new Date(o.archived_at).toLocaleString()}</div>
+                        <div class="order-item">
+                            <div class="header"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at).toLocaleString()}</span></div>
+                            <div>👤 ${o.buyer} → 🏪 ${o.seller}</div>
+                            <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
+                            <div class="pickup">📍 ${o.pickup}</div>
+                            <div class="flex-between" style="margin-top:6px;">
+                                <span class="total">${o.total_ar.toFixed(2)} АР</span>
+                                <span class="badge ${ORDER_STATUSES[o.status]?.color || 'badge-warning'}">${ORDER_STATUSES[o.status]?.label || o.status}</span>
                             </div>
-                        `).join('');
+                            <div style="font-size:11px;color:var(--text-secondary);">Архивирован: ${new Date(o.archived_at).toLocaleString()}</div>
+                        </div>
+                    `).join('');
                 }
                 modal.classList.add('open');
             } catch (error) {
@@ -1844,12 +1873,12 @@
                 const meta = TX_LABELS[t.type] || { icon: '💠', label: t.type };
                 const amt = Number(t.amount);
                 return `
-                        <div class="tx-row">
-                            <span>${meta.icon} ${meta.label}${t.username ? ' · <span style="color:var(--text-secondary);">' + t.username + '</span>' : ''}</span>
-                            <span class="tx-amount ${amt >= 0 ? 'positive' : 'negative'}">${amt >= 0 ? '+' : ''}${amt.toFixed(2)} АР</span>
-                            <span class="tx-desc">${t.description || ''} · ${new Date(t.created_at).toLocaleString()}</span>
-                        </div>
-                    `;
+                    <div class="tx-row">
+                        <span>${meta.icon} ${meta.label}${t.username ? ' · <span style="color:var(--text-secondary);">' + t.username + '</span>' : ''}</span>
+                        <span class="tx-amount ${amt >= 0 ? 'positive' : 'negative'}">${amt >= 0 ? '+' : ''}${amt.toFixed(2)} АР</span>
+                        <span class="tx-desc">${t.description || ''} · ${new Date(t.created_at).toLocaleString()}</span>
+                    </div>
+                `;
             }).join('');
         }
 
@@ -2056,20 +2085,20 @@
                 const balance = await getBalanceFor(user.username);
                 const enough = balance >= totalAR;
                 extra = `
-                        <p style="margin-top:8px;">💰 Ваш баланс: <strong>${balance.toFixed(2)} АР</strong></p>
-                        <p class="payment-hint ${enough ? '' : 'error'}">${enough ? 'Средств достаточно, спишется сразу при оформлении.' : 'Недостаточно средств на балансе — выберите оплату при получении.'}</p>
-                    `;
+                    <p style="margin-top:8px;">💰 Ваш баланс: <strong>${balance.toFixed(2)} АР</strong></p>
+                    <p class="payment-hint ${enough ? '' : 'error'}">${enough ? 'Средств достаточно, спишется сразу при оформлении.' : 'Недостаточно средств на балансе — выберите оплату при получении.'}</p>
+                `;
             } else {
                 extra = `<p class="payment-hint">Оплата производится сотруднику ПВЗ при получении заказа.</p>`;
             }
             document.getElementById('checkoutSummary').innerHTML =
                 `
-                    <p style="font-weight:600;margin-bottom:8px;">Итого:</p>
-                    <p>🟣 ${totalAR.toFixed(2)} АР</p>
-                    <p>💎 ${totalDiamonds.toFixed(2)} алмазов</p>
-                    <p style="font-size:12px;color:var(--text-secondary);margin-top:6px;">Товаров: ${cart.reduce((s, i) => s + i.quantity, 0)}</p>
-                    ${extra}
-                `;
+                <p style="font-weight:600;margin-bottom:8px;">Итого:</p>
+                <p>🟣 ${totalAR.toFixed(2)} АР</p>
+                <p>💎 ${totalDiamonds.toFixed(2)} алмазов</p>
+                <p style="font-size:12px;color:var(--text-secondary);margin-top:6px;">Товаров: ${cart.reduce((s, i) => s + i.quantity, 0)}</p>
+                ${extra}
+            `;
         };
 
         document.getElementById('checkoutForm').addEventListener('submit', async function(e) {
@@ -2115,7 +2144,7 @@
         });
 
         // ============================================================
-        // ИЗБРАННОЕ (НОВАЯ ВЕРСИЯ)
+        // ИЗБРАННОЕ
         // ============================================================
         async function handleWishlistToggle(productId, btnElement) {
             const user = getCurrentUser();
@@ -2463,35 +2492,35 @@
                 const inWishlist = wishlistStr.includes(String(p.id));
 
                 html += `
-                        <div class="product-card" data-product-id="${p.id}">
-                            ${isAdmin ? `<button class="admin-delete-btn" onclick="deleteProduct('${p.id}', true)" title="Удалить товар (админ)"><i class="fas fa-trash-alt"></i></button>` : ''}
-                            <button class="wishlist-btn ${inWishlist ? 'liked' : ''}" data-product-id="${p.id}" title="В избранное">
-                                <i class="fas fa-heart"></i>
-                            </button>
-                            <span class="icon">${p.icon || '📦'}</span>
-                            <div class="name">${p.name}</div>
-                            <div class="shop-name"><i class="fas fa-store-alt"></i> ${p.shop_name}</div>
-                            <span class="category-tag">${CATEGORY_ICONS[p.category] || '📦'} ${p.category}</span>
-                            <div class="price">🟣 ${p.price_ar.toFixed(2)} АР</div>
-                            <div class="price-alt">💎 ${priceDiamonds} алмазов</div>
-                            <div class="stock">
-                                ${p.stock > 10 ? `<span class="in-stock">✓ В наличии: ${p.stock}</span>` :
-                                  p.stock > 0 ? `<span class="low-stock">⚠ Осталось: ${p.stock}</span>` :
-                                  `<span class="out-of-stock">✗ Нет в наличии</span>`}
-                                ${p.sales > 0 ? ` · продано: ${p.sales}` : ''}
-                            </div>
-                            <div class="actions">
-                                ${isOwner ? `
-                                        <button class="btn btn-secondary btn-sm" onclick="showToast('Редактирование в разработке','info')"><i class="fas fa-edit"></i></button>
-                                        <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}', false)"><i class="fas fa-trash"></i></button>
-                                    ` : `
-                                        <button class="btn btn-primary btn-sm add-to-cart-btn" data-product-id="${p.id}" ${p.stock <= 0 ? 'disabled style="opacity:0.5;"' : ''}>
-                                            <i class="fas fa-cart-plus"></i> В корзину
-                                        </button>
-                                    `}
-                            </div>
+                    <div class="product-card" data-product-id="${p.id}">
+                        ${isAdmin ? `<button class="admin-delete-btn" onclick="deleteProduct('${p.id}', true)" title="Удалить товар (админ)"><i class="fas fa-trash-alt"></i></button>` : ''}
+                        <button class="wishlist-btn ${inWishlist ? 'liked' : ''}" data-product-id="${p.id}" title="В избранное">
+                            <i class="fas fa-heart"></i>
+                        </button>
+                        <span class="icon">${p.icon || '📦'}</span>
+                        <div class="name">${p.name}</div>
+                        <div class="shop-name"><i class="fas fa-store-alt"></i> ${p.shop_name}</div>
+                        <span class="category-tag">${CATEGORY_ICONS[p.category] || '📦'} ${p.category}</span>
+                        <div class="price">🟣 ${p.price_ar.toFixed(2)} АР</div>
+                        <div class="price-alt">💎 ${priceDiamonds} алмазов</div>
+                        <div class="stock">
+                            ${p.stock > 10 ? `<span class="in-stock">✓ В наличии: ${p.stock}</span>` :
+                              p.stock > 0 ? `<span class="low-stock">⚠ Осталось: ${p.stock}</span>` :
+                              `<span class="out-of-stock">✗ Нет в наличии</span>`}
+                            ${p.sales > 0 ? ` · продано: ${p.sales}` : ''}
                         </div>
-                    `;
+                        <div class="actions">
+                            ${isOwner ? `
+                                <button class="btn btn-secondary btn-sm" onclick="showToast('Редактирование в разработке','info')"><i class="fas fa-edit"></i></button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}', false)"><i class="fas fa-trash"></i></button>
+                            ` : `
+                                <button class="btn btn-primary btn-sm add-to-cart-btn" data-product-id="${p.id}" ${p.stock <= 0 ? 'disabled style="opacity:0.5;"' : ''}>
+                                    <i class="fas fa-cart-plus"></i> В корзину
+                                </button>
+                            `}
+                        </div>
+                    </div>
+                `;
             }
 
             grid.innerHTML = html;
@@ -2551,43 +2580,43 @@
                 const priceDiamonds = (item.priceAR * AR_TO_DIAMONDS * item.quantity).toFixed(2);
 
                 html += `
-                        <div class="cart-item">
-                            <div class="info">
-                                <div class="name">${item.icon || '📦'} ${item.name}</div>
-                                <div class="shop"><i class="fas fa-store-alt"></i> ${item.shopName}</div>
-                                <div class="price">🟣 ${item.priceAR.toFixed(2)} АР × ${item.quantity} = ${subtotal.toFixed(2)} АР</div>
-                                <div style="font-size:12px;color:var(--text-secondary);">💎 ${priceDiamonds} алмазов</div>
-                            </div>
-                            <div class="controls">
-                                <button onclick="updateCartQuantity('${item.productId}', -1)" ${item.quantity <= 1 ? 'disabled' : ''}>−</button>
-                                <span class="qty">${item.quantity}</span>
-                                <button onclick="updateCartQuantity('${item.productId}', 1)" ${stock <= item.quantity ? 'disabled' : ''}>+</button>
-                                <button class="remove" onclick="removeFromCart('${item.productId}')">✕</button>
-                            </div>
+                    <div class="cart-item">
+                        <div class="info">
+                            <div class="name">${item.icon || '📦'} ${item.name}</div>
+                            <div class="shop"><i class="fas fa-store-alt"></i> ${item.shopName}</div>
+                            <div class="price">🟣 ${item.priceAR.toFixed(2)} АР × ${item.quantity} = ${subtotal.toFixed(2)} АР</div>
+                            <div style="font-size:12px;color:var(--text-secondary);">💎 ${priceDiamonds} алмазов</div>
                         </div>
-                    `;
+                        <div class="controls">
+                            <button onclick="updateCartQuantity('${item.productId}', -1)" ${item.quantity <= 1 ? 'disabled' : ''}>−</button>
+                            <span class="qty">${item.quantity}</span>
+                            <button onclick="updateCartQuantity('${item.productId}', 1)" ${stock <= item.quantity ? 'disabled' : ''}>+</button>
+                            <button class="remove" onclick="removeFromCart('${item.productId}')">✕</button>
+                        </div>
+                    </div>
+                `;
             }
 
             const totalDiamonds = totalAR * AR_TO_DIAMONDS;
             html += `
-                    </div>
-                    <div class="cart-summary">
-                        <div class="flex-between">
-                            <div>
-                                <div class="total">🟣 ${totalAR.toFixed(2)} АР</div>
-                                <div class="total-alt">💎 ${totalDiamonds.toFixed(2)} алмазов</div>
-                            </div>
-                            <div class="actions">
-                                <button class="btn btn-secondary" onclick="setCart('${user.username}', []);renderUI();showToast('Корзина очищена','info')">
-                                    <i class="fas fa-trash"></i> Очистить
-                                </button>
-                                <button class="btn btn-primary" onclick="openCheckout()">
-                                    <i class="fas fa-check"></i> Оформить заказ
-                                </button>
-                            </div>
+                </div>
+                <div class="cart-summary">
+                    <div class="flex-between">
+                        <div>
+                            <div class="total">🟣 ${totalAR.toFixed(2)} АР</div>
+                            <div class="total-alt">💎 ${totalDiamonds.toFixed(2)} алмазов</div>
+                        </div>
+                        <div class="actions">
+                            <button class="btn btn-secondary" onclick="setCart('${user.username}', []);renderUI();showToast('Корзина очищена','info')">
+                                <i class="fas fa-trash"></i> Очистить
+                            </button>
+                            <button class="btn btn-primary" onclick="openCheckout()">
+                                <i class="fas fa-check"></i> Оформить заказ
+                            </button>
                         </div>
                     </div>
-                `;
+                </div>
+            `;
 
             container.innerHTML = html;
         }
@@ -2617,24 +2646,24 @@
             for (const p of products) {
                 const priceDiamonds = (p.price_ar * AR_TO_DIAMONDS).toFixed(2);
                 html += `
-                        <div class="product-card" data-product-id="${p.id}">
-                            <button class="wishlist-btn liked" data-product-id="${p.id}" title="Удалить из избранного">
-                                <i class="fas fa-heart"></i>
+                    <div class="product-card" data-product-id="${p.id}">
+                        <button class="wishlist-btn liked" data-product-id="${p.id}" title="Удалить из избранного">
+                            <i class="fas fa-heart"></i>
+                        </button>
+                        <span class="icon">${p.icon || '📦'}</span>
+                        <div class="name">${p.name}</div>
+                        <div class="shop-name"><i class="fas fa-store-alt"></i> ${p.shop_name}</div>
+                        <span class="category-tag">${CATEGORY_ICONS[p.category] || '📦'} ${p.category}</span>
+                        <div class="price">🟣 ${p.price_ar.toFixed(2)} АР</div>
+                        <div class="price-alt">💎 ${priceDiamonds} алмазов</div>
+                        <div class="stock">📦 В наличии: ${p.stock}</div>
+                        <div class="actions">
+                            <button class="btn btn-primary btn-sm add-to-cart-btn" data-product-id="${p.id}">
+                                <i class="fas fa-cart-plus"></i> В корзину
                             </button>
-                            <span class="icon">${p.icon || '📦'}</span>
-                            <div class="name">${p.name}</div>
-                            <div class="shop-name"><i class="fas fa-store-alt"></i> ${p.shop_name}</div>
-                            <span class="category-tag">${CATEGORY_ICONS[p.category] || '📦'} ${p.category}</span>
-                            <div class="price">🟣 ${p.price_ar.toFixed(2)} АР</div>
-                            <div class="price-alt">💎 ${priceDiamonds} алмазов</div>
-                            <div class="stock">📦 В наличии: ${p.stock}</div>
-                            <div class="actions">
-                                <button class="btn btn-primary btn-sm add-to-cart-btn" data-product-id="${p.id}">
-                                    <i class="fas fa-cart-plus"></i> В корзину
-                                </button>
-                            </div>
                         </div>
-                    `;
+                    </div>
+                `;
             }
 
             container.innerHTML = html;
@@ -2670,14 +2699,14 @@
             let html = '';
             rules.forEach((rule, index) => {
                 html += `
-                        <div class="rule-item">
-                            <div class="num">${index + 1}</div>
-                            <div class="content">
-                                <h4>Правило ${index + 1}</h4>
-                                <p>${rule}</p>
-                            </div>
+                    <div class="rule-item">
+                        <div class="num">${index + 1}</div>
+                        <div class="content">
+                            <h4>Правило ${index + 1}</h4>
+                            <p>${rule}</p>
                         </div>
-                    `;
+                    </div>
+                `;
             });
             container.innerHTML = html;
         }
@@ -2708,12 +2737,12 @@
             const pendingProducts = await getPendingProducts();
 
             let html = `
-                    <div class="profile-grid">
-                        <div class="profile-card">
-                            <div class="card-title"><i class="fas fa-user"></i> ${user.username} ${isBlocked ? '🔒' : ''}</div>
-                            <p style="color:var(--text-secondary);">Роль: ${user.role === 'admin' ? '👑 Администратор' : user.role === 'staff' ? '📮 Сотрудник ПВЗ' : user.role === 'courier' ? '🚚 Курьер' : user.role === 'seller' ? '🏪 Продавец' : '🛒 Покупатель'} ${isBlocked ? ' <span class="badge badge-danger">Заблокирован</span>' : ''}</p>
-                        </div>
-                `;
+                <div class="profile-grid">
+                    <div class="profile-card">
+                        <div class="card-title"><i class="fas fa-user"></i> ${user.username} ${isBlocked ? '🔒' : ''}</div>
+                        <p style="color:var(--text-secondary);">Роль: ${user.role === 'admin' ? '👑 Администратор' : user.role === 'staff' ? '📮 Сотрудник ПВЗ' : user.role === 'courier' ? '🚚 Курьер' : user.role === 'seller' ? '🏪 Продавец' : '🛒 Покупатель'} ${isBlocked ? ' <span class="badge badge-danger">Заблокирован</span>' : ''}</p>
+                    </div>
+            `;
 
             // ===== АДМИН =====
             if (user.role === 'admin') {
@@ -2729,76 +2758,76 @@
                 for (const bal of allBalances) balanceMap[bal.username] = Number(bal.balance);
 
                 html += `
-                        <div class="profile-card admin-panel">
-                            <div class="card-title"><i class="fas fa-shield-alt"></i> Админ-панель</div>
+                    <div class="profile-card admin-panel">
+                        <div class="card-title"><i class="fas fa-shield-alt"></i> Админ-панель</div>
 
-                            <!-- Заявки на магазины -->
-                            <div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.15);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
-                                <h4 style="font-size:15px;color:var(--warning);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-clock"></i> Заявки на магазины (${pendingShops.length})</h4>
-                    `;
+                        <!-- Заявки на магазины -->
+                        <div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.15);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                            <h4 style="font-size:15px;color:var(--warning);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-clock"></i> Заявки на магазины (${pendingShops.length})</h4>
+                `;
 
                 if (pendingShops.length === 0) {
                     html += `<p style="color:var(--text-secondary);font-size:14px;">✅ Нет заявок</p>`;
                 } else {
                     for (const s of pendingShops) {
                         html += `
-                                <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:14px;margin-bottom:10px;">
-                                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-                                        <div>
-                                            <div style="font-weight:700;font-size:16px;">🏪 ${s.name}</div>
-                                            <div style="font-size:13px;color:var(--text-secondary);"><i class="fas fa-user"></i> ${s.owner}</div>
-                                            <div style="font-size:13px;color:var(--text-secondary);">${s.description || 'Без описания'}</div>
-                                        </div>
-                                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                                            <button class="btn btn-success btn-sm" onclick="approveShop('${s.id}', true)"><i class="fas fa-check"></i> Одобрить</button>
-                                            <button class="btn btn-danger btn-sm" onclick="approveShop('${s.id}', false)"><i class="fas fa-times"></i> Отклонить</button>
-                                            <button class="btn btn-danger btn-sm" onclick="deleteSeller('${s.owner}')" style="background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.2);"><i class="fas fa-user-slash"></i> Удалить</button>
-                                        </div>
+                            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:14px;margin-bottom:10px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                                    <div>
+                                        <div style="font-weight:700;font-size:16px;">🏪 ${s.name}</div>
+                                        <div style="font-size:13px;color:var(--text-secondary);"><i class="fas fa-user"></i> ${s.owner}</div>
+                                        <div style="font-size:13px;color:var(--text-secondary);">${s.description || 'Без описания'}</div>
+                                    </div>
+                                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                        <button class="btn btn-success btn-sm" onclick="approveShop('${s.id}', true)"><i class="fas fa-check"></i> Одобрить</button>
+                                        <button class="btn btn-danger btn-sm" onclick="approveShop('${s.id}', false)"><i class="fas fa-times"></i> Отклонить</button>
+                                        <button class="btn btn-danger btn-sm" onclick="deleteSeller('${s.owner}')" style="background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.2);"><i class="fas fa-user-slash"></i> Удалить</button>
                                     </div>
                                 </div>
-                            `;
+                            </div>
+                        `;
                     }
                 }
 
                 html += `
-                            </div>
+                        </div>
 
-                            <!-- Товары на проверку -->
-                            <div style="background:rgba(6,182,212,0.05);border:1px solid rgba(6,182,212,0.15);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
-                                <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-boxes"></i> Товары на проверку (${pendingProducts.length})</h4>
-                    `;
+                        <!-- Товары на проверку -->
+                        <div style="background:rgba(6,182,212,0.05);border:1px solid rgba(6,182,212,0.15);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                            <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-boxes"></i> Товары на проверку (${pendingProducts.length})</h4>
+                `;
 
                 if (pendingProducts.length === 0) {
                     html += `<p style="color:var(--text-secondary);font-size:14px;">✅ Нет товаров</p>`;
                 } else {
                     for (const p of pendingProducts) {
                         html += `
-                                <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px;">
-                                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-                                        <div>
-                                            <div style="font-weight:600;">${p.icon || '📦'} ${p.name}</div>
-                                            <div style="font-size:13px;color:var(--text-secondary);">${p.shop_name} · ${p.seller} · ${CATEGORY_ICONS[p.category] || '📦'} ${p.category}</div>
-                                            <div style="font-size:13px;color:var(--secondary);">🟣 ${p.price_ar.toFixed(2)} АР · 📦 ${p.stock} шт.</div>
-                                        </div>
-                                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                                            <button class="btn btn-success btn-sm" onclick="approveProduct('${p.id}', true)">✅ Одобрить</button>
-                                            <button class="btn btn-danger btn-sm" onclick="approveProduct('${p.id}', false)">❌ Отклонить</button>
-                                            <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}', true)" style="background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.2);"><i class="fas fa-trash"></i></button>
-                                        </div>
+                            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                                    <div>
+                                        <div style="font-weight:600;">${p.icon || '📦'} ${p.name}</div>
+                                        <div style="font-size:13px;color:var(--text-secondary);">${p.shop_name} · ${p.seller} · ${CATEGORY_ICONS[p.category] || '📦'} ${p.category}</div>
+                                        <div style="font-size:13px;color:var(--secondary);">🟣 ${p.price_ar.toFixed(2)} АР · 📦 ${p.stock} шт.</div>
+                                    </div>
+                                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                                        <button class="btn btn-success btn-sm" onclick="approveProduct('${p.id}', true)">✅ Одобрить</button>
+                                        <button class="btn btn-danger btn-sm" onclick="approveProduct('${p.id}', false)">❌ Отклонить</button>
+                                        <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}', true)" style="background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.2);"><i class="fas fa-trash"></i></button>
                                     </div>
                                 </div>
-                            `;
+                            </div>
+                        `;
                     }
                 }
 
                 html += `
-                            </div>
+                        </div>
 
-                            <!-- Управление продавцами -->
-                            <div style="background:rgba(34,197,94,0.03);border:1px solid rgba(34,197,94,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
-                                <h4 style="font-size:15px;color:var(--success);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-store-alt"></i> Управление продавцами</h4>
-                                <div style="display:flex;flex-direction:column;gap:6px;">
-                    `;
+                        <!-- Управление продавцами -->
+                        <div style="background:rgba(34,197,94,0.03);border:1px solid rgba(34,197,94,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                            <h4 style="font-size:15px;color:var(--success);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-store-alt"></i> Управление продавцами</h4>
+                            <div style="display:flex;flex-direction:column;gap:6px;">
+                `;
 
                 if (sellers.length === 0) {
                     html += `<p style="color:var(--text-secondary);font-size:13px;">Нет продавцов</p>`;
@@ -2807,26 +2836,26 @@
                         const isBanned = bannedUsers.includes(s.username);
                         const productCount = allProducts.filter(p => p.seller === s.username).length;
                         html += `
-                                    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:rgba(255,255,255,0.02);border-radius:8px;flex-wrap:wrap;gap:4px;">
-                                        <span style="font-weight:500;cursor:pointer;color:var(--accent);" onclick="viewSellerProfile('${s.username}')">${s.username} <span style="color:var(--text-secondary);font-size:11px;">(${productCount} товаров)</span></span>
-                                        <span class="badge ${s.approved ? 'badge-success' : s.pending ? 'badge-warning' : 'badge-danger'}">${s.approved ? '✅ Одобрен' : s.pending ? '⏳ Ожидает' : '❌ Отклонён'}</span>
-                                        ${s.approved ? `<button class="btn ${isBanned ? 'btn-success' : 'btn-danger'} btn-sm" onclick="toggleBlockUser('${s.username}')">${isBanned ? '🔓 Разблокировать' : '🔒 Заблокировать'}</button>` : ''}
-                                        <button class="btn btn-danger btn-sm" onclick="deleteSeller('${s.username}')" style="background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.2);"><i class="fas fa-user-slash"></i> Удалить</button>
-                                        <button class="btn btn-info btn-sm" onclick="viewSellerProfile('${s.username}')"><i class="fas fa-eye"></i> Профиль</button>
-                                    </div>
-                                `;
+                            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:rgba(255,255,255,0.02);border-radius:8px;flex-wrap:wrap;gap:4px;">
+                                <span style="font-weight:500;cursor:pointer;color:var(--accent);" onclick="viewSellerProfile('${s.username}')">${s.username} <span style="color:var(--text-secondary);font-size:11px;">(${productCount} товаров)</span></span>
+                                <span class="badge ${s.approved ? 'badge-success' : s.pending ? 'badge-warning' : 'badge-danger'}">${s.approved ? '✅ Одобрен' : s.pending ? '⏳ Ожидает' : '❌ Отклонён'}</span>
+                                ${s.approved ? `<button class="btn ${isBanned ? 'btn-success' : 'btn-danger'} btn-sm" onclick="toggleBlockUser('${s.username}')">${isBanned ? '🔓 Разблокировать' : '🔒 Заблокировать'}</button>` : ''}
+                                <button class="btn btn-danger btn-sm" onclick="deleteSeller('${s.username}')" style="background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.2);"><i class="fas fa-user-slash"></i> Удалить</button>
+                                <button class="btn btn-info btn-sm" onclick="viewSellerProfile('${s.username}')"><i class="fas fa-eye"></i> Профиль</button>
+                            </div>
+                        `;
                     }
                 }
 
                 html += `
-                                </div>
                             </div>
+                        </div>
 
-                            <!-- Управление курьерами -->
-                            <div style="background:rgba(251,191,36,0.03);border:1px solid rgba(251,191,36,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
-                                <h4 style="font-size:15px;color:var(--warning);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-truck"></i> Управление курьерами</h4>
-                                <div style="display:flex;flex-direction:column;gap:6px;">
-                    `;
+                        <!-- Управление курьерами -->
+                        <div style="background:rgba(251,191,36,0.03);border:1px solid rgba(251,191,36,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                            <h4 style="font-size:15px;color:var(--warning);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-truck"></i> Управление курьерами</h4>
+                            <div style="display:flex;flex-direction:column;gap:6px;">
+                `;
 
                 if (couriers.length === 0) {
                     html += `<p style="color:var(--text-secondary);font-size:13px;">Нет курьеров</p>`;
@@ -2835,26 +2864,26 @@
                         const isBanned = bannedUsers.includes(c.username);
                         const balance = balanceMap[c.username] || 0;
                         html += `
-                                    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:rgba(255,255,255,0.02);border-radius:8px;flex-wrap:wrap;gap:4px;">
-                                        <span style="font-weight:500;cursor:pointer;color:var(--accent);" onclick="viewCourierProfile('${c.username}')">${c.username} <span style="color:var(--text-secondary);font-size:11px;">(${balance.toFixed(2)} АР)</span></span>
-                                        <span class="badge badge-success">✅ Активен</span>
-                                        <button class="btn ${isBanned ? 'btn-success' : 'btn-danger'} btn-sm" onclick="toggleBlockUser('${c.username}')">${isBanned ? '🔓 Разблокировать' : '🔒 Заблокировать'}</button>
-                                        <button class="btn btn-danger btn-sm" onclick="deleteCourier('${c.username}')" style="background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.2);"><i class="fas fa-user-slash"></i> Удалить</button>
-                                        <button class="btn btn-info btn-sm" onclick="viewCourierProfile('${c.username}')"><i class="fas fa-eye"></i> Профиль</button>
-                                    </div>
-                                `;
+                            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:rgba(255,255,255,0.02);border-radius:8px;flex-wrap:wrap;gap:4px;">
+                                <span style="font-weight:500;cursor:pointer;color:var(--accent);" onclick="viewCourierProfile('${c.username}')">${c.username} <span style="color:var(--text-secondary);font-size:11px;">(${balance.toFixed(2)} АР)</span></span>
+                                <span class="badge badge-success">✅ Активен</span>
+                                <button class="btn ${isBanned ? 'btn-success' : 'btn-danger'} btn-sm" onclick="toggleBlockUser('${c.username}')">${isBanned ? '🔓 Разблокировать' : '🔒 Заблокировать'}</button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteCourier('${c.username}')" style="background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.2);"><i class="fas fa-user-slash"></i> Удалить</button>
+                                <button class="btn btn-info btn-sm" onclick="viewCourierProfile('${c.username}')"><i class="fas fa-eye"></i> Профиль</button>
+                            </div>
+                        `;
                     }
                 }
 
                 html += `
-                                </div>
                             </div>
+                        </div>
 
-                            <!-- Управление сотрудниками ПВЗ -->
-                            <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
-                                <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-warehouse"></i> Сотрудники ПВЗ</h4>
-                                <div style="display:flex;flex-direction:column;gap:6px;">
-                    `;
+                        <!-- Управление сотрудниками ПВЗ -->
+                        <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                            <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-warehouse"></i> Сотрудники ПВЗ</h4>
+                            <div style="display:flex;flex-direction:column;gap:6px;">
+                `;
 
                 if (staffMembers.length === 0) {
                     html += `<p style="color:var(--text-secondary);font-size:13px;">Нет сотрудников ПВЗ</p>`;
@@ -2863,30 +2892,30 @@
                         if (s.username === STAFF_USERNAME) continue;
                         const isBanned = bannedUsers.includes(s.username);
                         html += `
-                                    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:rgba(255,255,255,0.02);border-radius:8px;flex-wrap:wrap;gap:4px;">
-                                        <span style="font-weight:500;">📮 ${s.username}</span>
-                                        <span class="badge badge-success">✅ Активен</span>
-                                        <button class="btn ${isBanned ? 'btn-success' : 'btn-danger'} btn-sm" onclick="toggleBlockUser('${s.username}')">${isBanned ? '🔓 Разблокировать' : '🔒 Заблокировать'}</button>
-                                        <button class="btn btn-danger btn-sm" onclick="deleteUserDB('${s.username}')" style="background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.2);"><i class="fas fa-user-slash"></i> Удалить</button>
-                                    </div>
-                                `;
+                            <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:rgba(255,255,255,0.02);border-radius:8px;flex-wrap:wrap;gap:4px;">
+                                <span style="font-weight:500;">📮 ${s.username}</span>
+                                <span class="badge badge-success">✅ Активен</span>
+                                <button class="btn ${isBanned ? 'btn-success' : 'btn-danger'} btn-sm" onclick="toggleBlockUser('${s.username}')">${isBanned ? '🔓 Разблокировать' : '🔒 Заблокировать'}</button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteUserDB('${s.username}')" style="background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.2);"><i class="fas fa-user-slash"></i> Удалить</button>
+                            </div>
+                        `;
                     }
                 }
 
                 html += `
-                                </div>
                             </div>
-                    `;
+                        </div>
+                `;
 
                 // Управление покупателями
                 const buyers = allUsers.filter(u => u.role === 'buyer');
                 const activeStatuses = ['pending', 'processing', 'ready_for_courier', 'in_transit', 'ready_for_pickup'];
 
                 html += `
-                        <details class="tx-log buyers-panel">
-                            <summary><i class="fas fa-users"></i> Покупатели (${buyers.length})</summary>
-                            <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px;">
-                    `;
+                    <details class="tx-log buyers-panel">
+                        <summary><i class="fas fa-users"></i> Покупатели (${buyers.length})</summary>
+                        <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px;">
+                `;
 
                 if (buyers.length === 0) {
                     html += `<p style="color:var(--text-secondary);font-size:13px;">Нет покупателей</p>`;
@@ -2895,25 +2924,25 @@
                         const buyerBalance = balanceMap[b.username] || 0;
                         const activeOrders = orders.filter(o => o.buyer === b.username && activeStatuses.includes(o.status));
                         html += `
-                                    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px;">
-                                        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-                                            <div>
-                                                <div style="font-weight:600;">🛒 ${b.username}</div>
-                                                <div style="font-size:13px;color:var(--secondary);margin-top:2px;">🟣 Баланс: ${buyerBalance.toFixed(2)} АР</div>
-                                                ${activeOrders.length > 0 ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Действующие заказы: ${activeOrders.map(o => `#${o.id} (${ORDER_STATUSES[o.status]?.label || o.status})`).join(', ')}</div>` : ''}
-                                            </div>
-                                            <button class="btn btn-danger btn-sm" onclick="adminResetBalance('${b.username}')" ${buyerBalance === 0 ? 'disabled' : ''}><i class="fas fa-ban"></i> Обнулить баланс</button>
-                                        </div>
-                                `;
+                            <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                                    <div>
+                                        <div style="font-weight:600;">🛒 ${b.username}</div>
+                                        <div style="font-size:13px;color:var(--secondary);margin-top:2px;">🟣 Баланс: ${buyerBalance.toFixed(2)} АР</div>
+                                        ${activeOrders.length > 0 ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Действующие заказы: ${activeOrders.map(o => `#${o.id} (${ORDER_STATUSES[o.status]?.label || o.status})`).join(', ')}</div>` : ''}
+                                    </div>
+                                    <button class="btn btn-danger btn-sm" onclick="adminResetBalance('${b.username}')" ${buyerBalance === 0 ? 'disabled' : ''}><i class="fas fa-ban"></i> Обнулить баланс</button>
+                                </div>
+                        `;
                         if (activeOrders.length > 0) {
                             html +=
                                 `<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;gap:6px;">`;
                             for (const o of activeOrders) {
                                 html += `
-                                            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;padding:6px 10px;background:rgba(255,255,255,0.02);border-radius:6px;font-size:13px;">
-                                                <span>#${o.id} · ${ORDER_STATUSES[o.status]?.label || o.status} · 🏪 ${o.seller} · ${o.currency === 'AR' ? '🟣 ' + o.total_ar.toFixed(2) + ' АР' : '💎 ' + o.total_diamonds.toFixed(2) + ' алм'}</span>
-                                            </div>
-                                        `;
+                                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;padding:6px 10px;background:rgba(255,255,255,0.02);border-radius:6px;font-size:13px;">
+                                        <span>#${o.id} · ${ORDER_STATUSES[o.status]?.label || o.status} · 🏪 ${o.seller} · ${o.currency === 'AR' ? '🟣 ' + o.total_ar.toFixed(2) + ' АР' : '💎 ' + o.total_diamonds.toFixed(2) + ' алм'}</span>
+                                    </div>
+                                `;
                             }
                             html += `</div>`;
                         }
@@ -2922,72 +2951,72 @@
                 }
 
                 html += `
-                            </div>
-                        </details>
-                    `;
+                        </div>
+                    </details>
+                `;
 
                 // Управление паролями
                 html += `
-                        <div style="background:rgba(124,58,237,0.03);border:1px solid rgba(124,58,237,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
-                            <h4 style="font-size:15px;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-key"></i> Управление паролями</h4>
-                            <button class="btn btn-primary btn-sm" onclick="openPasswordManager()"><i class="fas fa-edit"></i> Сменить пароль игроку</button>
-                        </div>
-                    `;
+                    <div style="background:rgba(124,58,237,0.03);border:1px solid rgba(124,58,237,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                        <h4 style="font-size:15px;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-key"></i> Управление паролями</h4>
+                        <button class="btn btn-primary btn-sm" onclick="openPasswordManager()"><i class="fas fa-edit"></i> Сменить пароль игроку</button>
+                    </div>
+                `;
 
                 // Активные сессии
                 html += `
-                        <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
-                            <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-desktop"></i> Активные сессии</h4>
-                            <div id="adminSessionsContainer"></div>
-                        </div>
-                    `;
+                    <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                        <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-desktop"></i> Активные сессии</h4>
+                        <div id="adminSessionsContainer"></div>
+                    </div>
+                `;
 
                 // Правила
                 html += `
-                        <div style="background:rgba(251,191,36,0.03);border:1px solid rgba(251,191,36,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
-                            <h4 style="font-size:15px;color:var(--warning);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-gavel"></i> Правила</h4>
-                            <button class="btn btn-primary btn-sm" onclick="openRulesEditor()"><i class="fas fa-edit"></i> Редактировать правила</button>
-                        </div>
-                    `;
+                    <div style="background:rgba(251,191,36,0.03);border:1px solid rgba(251,191,36,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                        <h4 style="font-size:15px;color:var(--warning);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-gavel"></i> Правила</h4>
+                        <button class="btn btn-primary btn-sm" onclick="openRulesEditor()"><i class="fas fa-edit"></i> Редактировать правила</button>
+                    </div>
+                `;
 
                 // Пункты выдачи
                 html += `
-                        <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;">
-                            <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-map-pin"></i> Пункты выдачи (${points.length})</h4>
-                            <div class="pickup-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-                                ${points.map(p => `<span class="tag">${p}<button class="del" onclick="removePickupPoint('${p}')">✕</button></span>`).join('')}
-                            </div>
-                            <button class="btn btn-primary btn-sm" onclick="addPickupPoint()"><i class="fas fa-plus"></i> Добавить</button>
+                    <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;">
+                        <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-map-pin"></i> Пункты выдачи (${points.length})</h4>
+                        <div class="pickup-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                            ${points.map(p => `<span class="tag">${p}<button class="del" onclick="removePickupPoint('${p}')">✕</button></span>`).join('')}
                         </div>
-                    `;
+                        <button class="btn btn-primary btn-sm" onclick="addPickupPoint()"><i class="fas fa-plus"></i> Добавить</button>
+                    </div>
+                `;
 
                 // Пополнение баланса
                 html += `
-                        <div style="background:rgba(124,58,237,0.03);border:1px solid rgba(124,58,237,0.1);border-radius:var(--radius-sm);padding:16px;margin-top:16px;">
-                            <h4 style="font-size:15px;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-coins"></i> Пополнить баланс игрока</h4>
-                            <form class="inline-form" onsubmit="return handleAdminTopUp(event)">
-                                <input type="text" id="adminTopUpUsername" placeholder="Логин игрока" required />
-                                <input type="number" id="adminTopUpAmount" placeholder="Сумма АР" min="0.01" step="0.01" required />
-                                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Пополнить</button>
-                            </form>
-                        </div>
-                    `;
+                    <div style="background:rgba(124,58,237,0.03);border:1px solid rgba(124,58,237,0.1);border-radius:var(--radius-sm);padding:16px;margin-top:16px;">
+                        <h4 style="font-size:15px;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-coins"></i> Пополнить баланс игрока</h4>
+                        <form class="inline-form" onsubmit="return handleAdminTopUp(event)">
+                            <input type="text" id="adminTopUpUsername" placeholder="Логин игрока" required />
+                            <input type="number" id="adminTopUpAmount" placeholder="Сумма АР" min="0.01" step="0.01" required />
+                            <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Пополнить</button>
+                        </form>
+                    </div>
+                `;
 
                 // Архив заказов
                 html += `
-                        <div style="background:rgba(34,197,94,0.03);border:1px solid rgba(34,197,94,0.1);border-radius:var(--radius-sm);padding:16px;margin-top:16px;">
-                            <h4 style="font-size:15px;color:var(--success);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-archive"></i> Архив заказов</h4>
-                            <button class="btn btn-primary btn-sm" onclick="openArchive()"><i class="fas fa-folder-open"></i> Открыть архив</button>
-                        </div>
-                    `;
+                    <div style="background:rgba(34,197,94,0.03);border:1px solid rgba(34,197,94,0.1);border-radius:var(--radius-sm);padding:16px;margin-top:16px;">
+                        <h4 style="font-size:15px;color:var(--success);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-archive"></i> Архив заказов</h4>
+                        <button class="btn btn-primary btn-sm" onclick="openArchive()"><i class="fas fa-folder-open"></i> Открыть архив</button>
+                    </div>
+                `;
 
                 // Лог транзакций
                 html += `
-                        <details class="tx-log">
-                            <summary><i class="fas fa-receipt"></i> Лог всех транзакций (${(await getAllTransactions()).length})</summary>
-                            <div class="tx-list">${renderTransactionRows(await getAllTransactions())}</div>
-                        </details>
-                    `;
+                    <details class="tx-log">
+                        <summary><i class="fas fa-receipt"></i> Лог всех транзакций (${(await getAllTransactions()).length})</summary>
+                        <div class="tx-list">${renderTransactionRows(await getAllTransactions())}</div>
+                    </details>
+                `;
 
                 html += `</div>`;
             }
@@ -3013,51 +3042,51 @@
 
                 if (shop && shop.approved) {
                     html += `
-                            <div class="profile-card"><div class="card-title">🏪 ${shop.name}</div><p style="color:var(--text-secondary);">${shop.description}</p><span class="badge badge-success">✅ Одобрен</span></div>
-                            <div class="profile-card">
-                                <div class="card-title">📦 Мои товары (${myProducts.length})</div>
-                                <button class="btn btn-primary btn-sm" onclick="document.getElementById('productModal').classList.add('open');" style="margin-bottom:12px;"><i class="fas fa-plus"></i> Добавить товар</button>
-                                <div class="my-products-grid">
-                                    ${myProducts.map(p => `
-                                            <div class="my-product-item">
-                                                <div class="icon">${p.icon || '📦'}</div>
-                                                <div class="name">${p.name}</div>
-                                                <div class="price">🟣 ${p.price_ar.toFixed(2)} АР</div>
-                                                <div class="stock">📦 ${p.stock}</div>
-                                                <div class="status-badge ${p.status === 'approved' ? 'badge-success' : p.status === 'pending' ? 'badge-warning' : 'badge-danger'}">${p.status === 'approved' ? '✅ Опубликован' : p.status === 'pending' ? '⏳ На проверке' : '❌ Отклонён'}</div>
-                                                <div class="actions"><button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}', false)">🗑️</button></div>
-                                            </div>
-                                        `).join('')}
-                                </div>
+                        <div class="profile-card"><div class="card-title">🏪 ${shop.name}</div><p style="color:var(--text-secondary);">${shop.description}</p><span class="badge badge-success">✅ Одобрен</span></div>
+                        <div class="profile-card">
+                            <div class="card-title">📦 Мои товары (${myProducts.length})</div>
+                            <button class="btn btn-primary btn-sm" onclick="document.getElementById('productModal').classList.add('open');" style="margin-bottom:12px;"><i class="fas fa-plus"></i> Добавить товар</button>
+                            <div class="my-products-grid">
+                                ${myProducts.map(p => `
+                                    <div class="my-product-item">
+                                        <div class="icon">${p.icon || '📦'}</div>
+                                        <div class="name">${p.name}</div>
+                                        <div class="price">🟣 ${p.price_ar.toFixed(2)} АР</div>
+                                        <div class="stock">📦 ${p.stock}</div>
+                                        <div class="status-badge ${p.status === 'approved' ? 'badge-success' : p.status === 'pending' ? 'badge-warning' : 'badge-danger'}">${p.status === 'approved' ? '✅ Опубликован' : p.status === 'pending' ? '⏳ На проверке' : '❌ Отклонён'}</div>
+                                        <div class="actions"><button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}', false)">🗑️</button></div>
+                                    </div>
+                                `).join('')}
                             </div>
-                        `;
+                        </div>
+                    `;
 
                     if (sellerOrders.length > 0) {
                         html += `
-                                <div class="profile-card"><div class="card-title">📦 Заказы (${sellerOrders.length})</div><div style="display:flex;flex-direction:column;gap:10px;">
-                            `;
+                            <div class="profile-card"><div class="card-title">📦 Заказы (${sellerOrders.length})</div><div style="display:flex;flex-direction:column;gap:10px;">
+                        `;
 
                         for (const o of sellerOrders.slice().reverse()) {
                             const canSendToCourier = o.status === 'processing';
                             html += `
-                                    <div class="order-item">
-                                        <div class="header"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at || Date.now()).toLocaleString()}</span></div>
-                                        <div class="buyer">👤 ${o.buyer}</div>
-                                        <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
-                                        <div class="pickup">📍 ${o.pickup}</div>
-                                        <div class="flex-between" style="margin-top:6px;">
-                                            <span class="total">${o.currency === 'AR' ? '🟣' : '💎'} ${o.currency === 'AR' ? o.total_ar.toFixed(2) + ' АР' : o.total_diamonds.toFixed(2) + ' алм'}</span>
-                                            <span class="badge ${ORDER_STATUSES[o.status]?.color || 'badge-warning'}">${ORDER_STATUSES[o.status]?.label || o.status}</span>
-                                        </div>
-                                        <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">${o.payment_method === 'balance' ? '💳 Оплачен с баланса' : '💵 Оплата при получении'}</div>
-                                        <div class="status-actions">
-                                            ${o.status === 'pending' ? `<button class="btn btn-info btn-sm" onclick="updateOrderStatus('${o.id}', 'processing', this)">🔄 Взять в работу</button>` : ''}
-                                            ${canSendToCourier ? `<button class="btn btn-warning btn-sm" onclick="updateOrderStatus('${o.id}', 'ready_for_courier', this)"><i class="fas fa-truck"></i> Передать курьеру</button>` : ''}
-                                            ${o.status === 'ready_for_courier' ? `<span style="font-size:12px;color:var(--text-secondary);"><i class="fas fa-clock"></i> Ожидает курьера</span>` : ''}
-                                            ${o.status === 'in_transit' ? `<span style="font-size:12px;color:var(--secondary);"><i class="fas fa-truck"></i> В пути (курьер: ${o.courier || 'не назначен'})</span>` : ''}
-                                        </div>
+                                <div class="order-item">
+                                    <div class="header"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at || Date.now()).toLocaleString()}</span></div>
+                                    <div class="buyer">👤 ${o.buyer}</div>
+                                    <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
+                                    <div class="pickup">📍 ${o.pickup}</div>
+                                    <div class="flex-between" style="margin-top:6px;">
+                                        <span class="total">${o.currency === 'AR' ? '🟣' : '💎'} ${o.currency === 'AR' ? o.total_ar.toFixed(2) + ' АР' : o.total_diamonds.toFixed(2) + ' алм'}</span>
+                                        <span class="badge ${ORDER_STATUSES[o.status]?.color || 'badge-warning'}">${ORDER_STATUSES[o.status]?.label || o.status}</span>
                                     </div>
-                                `;
+                                    <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">${o.payment_method === 'balance' ? '💳 Оплачен с баланса' : '💵 Оплата при получении'}</div>
+                                    <div class="status-actions">
+                                        ${o.status === 'pending' ? `<button class="btn btn-info btn-sm" onclick="window.updateOrderStatus('${o.id}', 'processing', this)">🔄 Взять в работу</button>` : ''}
+                                        ${canSendToCourier ? `<button class="btn btn-warning btn-sm" onclick="window.updateOrderStatus('${o.id}', 'ready_for_courier', this)"><i class="fas fa-truck"></i> Передать курьеру</button>` : ''}
+                                        ${o.status === 'ready_for_courier' ? `<span style="font-size:12px;color:var(--text-secondary);"><i class="fas fa-clock"></i> Ожидает курьера</span>` : ''}
+                                        ${o.status === 'in_transit' ? `<span style="font-size:12px;color:var(--secondary);"><i class="fas fa-truck"></i> В пути (курьер: ${o.courier || 'не назначен'})</span>` : ''}
+                                    </div>
+                                </div>
+                            `;
                         }
 
                         html += `</div></div>`;
@@ -3068,10 +3097,10 @@
             // ===== ПОКУПАТЕЛЬ (заказы) =====
             if (buyerOrders.length > 0) {
                 html += `
-                        <div class="profile-card"><div class="card-title">📜 Мои заказы (${buyerOrders.length})</div>
-                        <button class="btn btn-secondary btn-sm" onclick="openArchive()" style="margin-bottom:12px;"><i class="fas fa-archive"></i> Архив</button>
-                        <div style="display:flex;flex-direction:column;gap:10px;">
-                    `;
+                    <div class="profile-card"><div class="card-title">📜 Мои заказы (${buyerOrders.length})</div>
+                    <button class="btn btn-secondary btn-sm" onclick="openArchive()" style="margin-bottom:12px;"><i class="fas fa-archive"></i> Архив</button>
+                    <div style="display:flex;flex-direction:column;gap:10px;">
+                `;
 
                 for (const o of buyerOrders.slice().reverse()) {
                     const createdAt = new Date(o.created_at);
@@ -3081,38 +3110,38 @@
                     const timeLeft = canCancel ? Math.floor(15 - diffMinutes) : 0;
 
                     html += `
-                            <div class="order-item" style="${o.status === 'cancelled' ? 'opacity:0.6;border-color:var(--danger);' : ''}">
-                                <div class="header"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at).toLocaleString()}</span></div>
-                                <div class="buyer">🏪 ${o.seller}</div>
-                                <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
-                                <div class="pickup">📍 ${o.pickup}</div>
-                                <div class="flex-between" style="margin-top:6px;">
-                                    <span class="total">${o.currency === 'AR' ? '🟣' : '💎'} ${o.currency === 'AR' ? o.total_ar.toFixed(2) + ' АР' : o.total_diamonds.toFixed(2) + ' алм'}</span>
-                                    <span class="badge ${ORDER_STATUSES[o.status]?.color || 'badge-warning'}">${ORDER_STATUSES[o.status]?.label || o.status}</span>
-                                </div>
-                                <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${o.payment_method === 'balance' ? '💳 Оплачен с баланса' : '💵 Оплата при получении'}</div>
-                                ${canCancel ? `
-                                        <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                                            <button class="btn btn-danger btn-sm" onclick="cancelOrder('${o.id}')" style="font-size:12px;">
-                                                <i class="fas fa-times"></i> Отменить заказ
-                                            </button>
-                                            <span style="font-size:12px;color:var(--text-secondary);">
-                                                ⏳ Осталось ${timeLeft} мин.
-                                            </span>
-                                        </div>
-                                    ` : ''}
-                                ${o.status === 'cancelled' ? `
-                                        <div style="margin-top:8px;font-size:12px;color:var(--danger);">
-                                            <i class="fas fa-ban"></i> Заказ отменён
-                                        </div>
-                                    ` : ''}
-                                ${o.status === 'completed' && o.payment_method === 'cash' ? `
-                                        <div style="margin-top:8px;font-size:12px;color:var(--success);">
-                                            <i class="fas fa-check-circle"></i> Оплачен и выдан
-                                        </div>
-                                    ` : ''}
+                        <div class="order-item" style="${o.status === 'cancelled' ? 'opacity:0.6;border-color:var(--danger);' : ''}">
+                            <div class="header"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at).toLocaleString()}</span></div>
+                            <div class="buyer">🏪 ${o.seller}</div>
+                            <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
+                            <div class="pickup">📍 ${o.pickup}</div>
+                            <div class="flex-between" style="margin-top:6px;">
+                                <span class="total">${o.currency === 'AR' ? '🟣' : '💎'} ${o.currency === 'AR' ? o.total_ar.toFixed(2) + ' АР' : o.total_diamonds.toFixed(2) + ' алм'}</span>
+                                <span class="badge ${ORDER_STATUSES[o.status]?.color || 'badge-warning'}">${ORDER_STATUSES[o.status]?.label || o.status}</span>
                             </div>
-                        `;
+                            <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${o.payment_method === 'balance' ? '💳 Оплачен с баланса' : '💵 Оплата при получении'}</div>
+                            ${canCancel ? `
+                                <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <button class="btn btn-danger btn-sm" onclick="cancelOrder('${o.id}')" style="font-size:12px;">
+                                        <i class="fas fa-times"></i> Отменить заказ
+                                    </button>
+                                    <span style="font-size:12px;color:var(--text-secondary);">
+                                        ⏳ Осталось ${timeLeft} мин.
+                                    </span>
+                                </div>
+                            ` : ''}
+                            ${o.status === 'cancelled' ? `
+                                <div style="margin-top:8px;font-size:12px;color:var(--danger);">
+                                    <i class="fas fa-ban"></i> Заказ отменён
+                                </div>
+                            ` : ''}
+                            ${o.status === 'completed' && o.payment_method === 'cash' ? `
+                                <div style="margin-top:8px;font-size:12px;color:var(--success);">
+                                    <i class="fas fa-check-circle"></i> Оплачен и выдан
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
                 }
 
                 html += `</div></div>`;
@@ -3120,12 +3149,12 @@
 
             if (user.role === 'buyer' && buyerOrders.length === 0) {
                 html += `
-                        <div class="profile-card"><div class="card-title">🛒 Покупатель</div>
-                        <p>Добро пожаловать в WildCraft Market!</p>
-                        <button class="btn btn-secondary btn-sm" onclick="openArchive()" style="margin-top:8px;"><i class="fas fa-archive"></i> Архив заказов</button>
-                        <button class="btn btn-primary" onclick="switchPage('catalog')" style="margin-top:8px;">В каталог</button>
-                        </div>
-                    `;
+                    <div class="profile-card"><div class="card-title">🛒 Покупатель</div>
+                    <p>Добро пожаловать в WildCraft Market!</p>
+                    <button class="btn btn-secondary btn-sm" onclick="openArchive()" style="margin-top:8px;"><i class="fas fa-archive"></i> Архив заказов</button>
+                    <button class="btn btn-primary" onclick="switchPage('catalog')" style="margin-top:8px;">В каталог</button>
+                    </div>
+                `;
             }
 
             html += '</div>';
@@ -3148,83 +3177,83 @@
             const myTx = await getTransactionsFor(user.username);
 
             let html = `
-                    <div class="wallet-hero">
-                        <div class="label">Баланс</div>
-                        <div class="amount text-gradient">🟣 ${balance.toFixed(2)} АР</div>
-                        <div class="label">≈ ${(balance * AR_TO_DIAMONDS).toFixed(2)} алмазов</div>
-                    </div>
-                `;
+                <div class="wallet-hero">
+                    <div class="label">Баланс</div>
+                    <div class="amount text-gradient">🟣 ${balance.toFixed(2)} АР</div>
+                    <div class="label">≈ ${(balance * AR_TO_DIAMONDS).toFixed(2)} алмазов</div>
+                </div>
+            `;
 
             if (user.role === 'staff' || user.role === 'admin') {
                 const orders = await getOrders();
                 const readyOrders = orders.filter(o => o.status === 'ready_for_pickup');
                 html += `
-                        <div class="wallet-grid">
-                            <div class="profile-card">
-                                <div class="card-title"><i class="fas fa-coins"></i> Пополнить баланс игрока</div>
-                                <p style="color:var(--text-secondary);font-size:13px;">Выдача денег наличными/предметами на ПВЗ — отразите её здесь</p>
-                                <form class="inline-form" onsubmit="return handleAdminTopUp(event)">
-                                    <input type="text" id="adminTopUpUsername" placeholder="Логин игрока" required />
-                                    <input type="number" id="adminTopUpAmount" placeholder="Сумма АР" min="0.01" step="0.01" required />
-                                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Пополнить</button>
-                                </form>
-                            </div>
-                        </div>
+                    <div class="wallet-grid">
                         <div class="profile-card">
-                            <div class="card-title"><i class="fas fa-box-open"></i> Заказы, готовые к выдаче (${readyOrders.length})</div>
-                    `;
+                            <div class="card-title"><i class="fas fa-coins"></i> Пополнить баланс игрока</div>
+                            <p style="color:var(--text-secondary);font-size:13px;">Выдача денег наличными/предметами на ПВЗ — отразите её здесь</p>
+                            <form class="inline-form" onsubmit="return handleAdminTopUp(event)">
+                                <input type="text" id="adminTopUpUsername" placeholder="Логин игрока" required />
+                                <input type="number" id="adminTopUpAmount" placeholder="Сумма АР" min="0.01" step="0.01" required />
+                                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Пополнить</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="profile-card">
+                        <div class="card-title"><i class="fas fa-box-open"></i> Заказы, готовые к выдаче (${readyOrders.length})</div>
+                `;
                 if (readyOrders.length === 0) {
                     html += `<p style="color:var(--text-secondary);font-size:14px;">Нет заказов, ожидающих выдачи</p>`;
                 } else {
                     for (const o of readyOrders.slice().reverse()) {
                         html += `
-                                <div class="staff-order-item">
-                                    <div class="header flex-between"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at).toLocaleString()}</span></div>
-                                    <div>👤 Покупатель: <strong>${o.buyer}</strong> · 🏪 Продавец: ${o.seller}</div>
-                                    <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
-                                    <div>📍 ${o.pickup} · ${o.payment_method === 'balance' ? '💳 Оплачен с баланса' : '💵 Оплата при получении: ' + o.total_ar.toFixed(2) + ' АР'}</div>
-                                    <div style="margin-top:8px;">
-                                        <button class="btn btn-success btn-sm" onclick="updateOrderStatus('${o.id}', 'completed', this)"><i class="fas fa-hand-holding"></i> Выдать заказ</button>
-                                    </div>
+                            <div class="staff-order-item">
+                                <div class="header flex-between"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at).toLocaleString()}</span></div>
+                                <div>👤 Покупатель: <strong>${o.buyer}</strong> · 🏪 Продавец: ${o.seller}</div>
+                                <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
+                                <div>📍 ${o.pickup} · ${o.payment_method === 'balance' ? '💳 Оплачен с баланса' : '💵 Оплата при получении: ' + o.total_ar.toFixed(2) + ' АР'}</div>
+                                <div style="margin-top:8px;">
+                                    <button class="btn btn-success btn-sm" onclick="window.updateOrderStatus('${o.id}', 'completed', this)"><i class="fas fa-hand-holding"></i> Выдать заказ</button>
                                 </div>
-                            `;
+                            </div>
+                        `;
                     }
                 }
                 html += `</div>`;
             } else {
                 html += `
-                        <div class="wallet-grid">
-                            <div class="profile-card">
-                                <div class="card-title"><i class="fas fa-paper-plane"></i> Перевести другому игроку</div>
-                                <form class="inline-form" onsubmit="return handleTransfer(event)">
-                                    <input type="text" id="transferTo" placeholder="Логин получателя" required />
-                                    <input type="number" id="transferAmount" placeholder="Сумма АР" min="0.01" step="0.01" max="${balance}" required />
-                                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-paper-plane"></i> Перевести</button>
-                                </form>
-                            </div>
-                    `;
+                    <div class="wallet-grid">
+                        <div class="profile-card">
+                            <div class="card-title"><i class="fas fa-paper-plane"></i> Перевести другому игроку</div>
+                            <form class="inline-form" onsubmit="return handleTransfer(event)">
+                                <input type="text" id="transferTo" placeholder="Логин получателя" required />
+                                <input type="number" id="transferAmount" placeholder="Сумма АР" min="0.01" step="0.01" max="${balance}" required />
+                                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-paper-plane"></i> Перевести</button>
+                            </form>
+                        </div>
+                `;
                 if (user.role === 'seller') {
                     const points = await getPickupPoints();
                     html += `
-                            <div class="profile-card">
-                                <div class="card-title"><i class="fas fa-hand-holding-usd"></i> Вывести средства через ПВЗ</div>
-                                <form class="inline-form" onsubmit="return handleWithdraw(event)">
-                                    <select id="withdrawPickup" required>${points.map(p => `<option value="${p}">${p}</option>`).join('')}</select>
-                                    <input type="number" id="withdrawAmount" placeholder="Сумма АР" min="0.01" step="0.01" max="${balance}" required />
-                                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-hand-holding-usd"></i> Вывести</button>
-                                </form>
-                            </div>
-                        `;
+                        <div class="profile-card">
+                            <div class="card-title"><i class="fas fa-hand-holding-usd"></i> Вывести средства через ПВЗ</div>
+                            <form class="inline-form" onsubmit="return handleWithdraw(event)">
+                                <select id="withdrawPickup" required>${points.map(p => `<option value="${p}">${p}</option>`).join('')}</select>
+                                <input type="number" id="withdrawAmount" placeholder="Сумма АР" min="0.01" step="0.01" max="${balance}" required />
+                                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-hand-holding-usd"></i> Вывести</button>
+                            </form>
+                        </div>
+                    `;
                 }
                 html += `</div>`;
             }
 
             html += `
-                    <details class="tx-log" open>
-                        <summary><i class="fas fa-receipt"></i> История операций (${myTx.length})</summary>
-                        <div class="tx-list">${renderTransactionRows(myTx.slice().reverse())}</div>
-                    </details>
-                `;
+                <details class="tx-log" open>
+                    <summary><i class="fas fa-receipt"></i> История операций (${myTx.length})</summary>
+                    <div class="tx-list">${renderTransactionRows(myTx.slice().reverse())}</div>
+                </details>
+            `;
 
             container.innerHTML = html;
         }
@@ -3317,14 +3346,14 @@
                 const main = document.querySelector('.main .container') || document.querySelector('.main');
                 if (main) {
                     main.innerHTML = `
-                            <div class="empty-state" style="border:1px solid rgba(239,68,68,0.25);background:rgba(239,68,68,0.05);border-radius:var(--radius);padding:40px 24px;">
-                                <i class="fas fa-plug-circle-xmark" style="color:var(--danger);"></i>
-                                <h3>Не удалось подключиться к серверу</h3>
-                                <p style="color:var(--danger);font-family:monospace;font-size:13px;word-break:break-word;">${realReason}</p>
-                                <p>Обычно это значит, что на сервере не настроена или отвязалась переменная <code>POSTGRES_URL</code> (подключение к базе данных Neon).</p>
-                                <button class="btn btn-primary" onclick="location.reload()"><i class="fas fa-rotate-right"></i> Повторить</button>
-                            </div>
-                        `;
+                        <div class="empty-state" style="border:1px solid rgba(239,68,68,0.25);background:rgba(239,68,68,0.05);border-radius:var(--radius);padding:40px 24px;">
+                            <i class="fas fa-plug-circle-xmark" style="color:var(--danger);"></i>
+                            <h3>Не удалось подключиться к серверу</h3>
+                            <p style="color:var(--danger);font-family:monospace;font-size:13px;word-break:break-word;">${realReason}</p>
+                            <p>Обычно это значит, что на сервере не настроена или отвязалась переменная <code>POSTGRES_URL</code> (подключение к базе данных Neon).</p>
+                            <button class="btn btn-primary" onclick="location.reload()"><i class="fas fa-rotate-right"></i> Повторить</button>
+                        </div>
+                    `;
                 }
             }
         })();
