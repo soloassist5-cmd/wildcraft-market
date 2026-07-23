@@ -29,6 +29,34 @@ async function ensureSchema() {
         created_at TIMESTAMP NOT NULL DEFAULT NOW()
     )`);
     await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'cash'`);
+
+    // ------------------------------------------------------------
+    // МИГРАЦИЯ: гарантируем автозаполнение transactions.id.
+    // В реальной Neon-базе таблица transactions могла быть создана
+    // ДО того, как id стал SERIAL — CREATE TABLE IF NOT EXISTS выше
+    // такую уже существующую таблицу не трогает, поэтому id мог
+    // остаться без DEFAULT/sequence, и INSERT (который id не передаёт)
+    // падал с "null value in column id violates not-null constraint".
+    // Ниже — идемпотентная миграция, безопасная при любом текущем
+    // состоянии таблицы (свежесозданной или существующей давно):
+    // 1) создаём/привязываем sequence к transactions.id, если её ещё нет;
+    // 2) выставляем DEFAULT nextval(...) на колонку id;
+    // 3) синхронизируем sequence с максимальным существующим id;
+    // 4) и только после этого, если id ещё nullable и NULL-строк нет,
+    //    делаем её NOT NULL.
+    // ------------------------------------------------------------
+    await pool.query(`CREATE SEQUENCE IF NOT EXISTS transactions_id_seq OWNED BY transactions.id`);
+    await pool.query(`ALTER TABLE transactions ALTER COLUMN id SET DEFAULT nextval('transactions_id_seq')`);
+    await pool.query(`SELECT setval('transactions_id_seq', COALESCE((SELECT MAX(id) FROM transactions), 0) + 1, false)`);
+    await pool.query(`
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM transactions WHERE id IS NULL) THEN
+                ALTER TABLE transactions ALTER COLUMN id SET NOT NULL;
+            END IF;
+        END $$;
+    `);
+
     schemaReady = true;
 }
 
@@ -271,6 +299,106 @@ export default async function handler(req, res) {
             }
             console.log('✅ Статус блокировки обновлён:', username, '→', !!blocked);
             return res.status(200).json({ success: true });
+        }
+
+        // ===== АДМИН: ОБНУЛЕНИЕ БАЛАНСА ПОКУПАТЕЛЯ (НОВОЕ) =====
+        if (action === 'adminResetBalance') {
+            const { username, actor } = data || {};
+            if (!username || !actor) {
+                return res.status(400).json({ error: 'username и actor обязательны' });
+            }
+            const actorRes = await pool.query('SELECT role FROM users WHERE username = $1', [actor]);
+            if (actorRes.rows[0]?.role !== 'admin') {
+                return res.status(403).json({ error: 'Обнулять баланс может только администратор' });
+            }
+            const targetRes = await pool.query('SELECT username FROM users WHERE username = $1', [username]);
+            if (targetRes.rows.length === 0) {
+                return res.status(404).json({ error: 'Пользователь не найден' });
+            }
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+                const balRes = await client.query('SELECT balance FROM balances WHERE username = $1 FOR UPDATE', [username]);
+                const currentBalance = Number(balRes.rows[0]?.balance || 0);
+                if (currentBalance !== 0) {
+                    await client.query('UPDATE balances SET balance = 0 WHERE username = $1', [username]);
+                    await logTransaction(client, username, 'balance_reset', -currentBalance, `Баланс обнулён администратором (${actor})`);
+                }
+                await client.query('COMMIT');
+            } catch (err) {
+                await client.query('ROLLBACK');
+                throw err;
+            } finally {
+                client.release();
+            }
+            console.log('✅ Баланс обнулён администратором:', username, 'от', actor);
+            return res.status(200).json({ success: true });
+        }
+
+        // ===== АДМИН: ОТМЕНА ЗАКАЗА ИЗ-ЗА ТЕХ. НЕПОЛАДОК (НОВОЕ) =====
+        // В отличие от обычного cancelOrder (доступного только покупателю
+        // в первые 15 минут и только для статуса pending), эта отмена
+        // доступна только администратору, не ограничена по времени и
+        // работает для любого статуса, кроме уже completed/cancelled.
+        if (action === 'adminCancelOrder') {
+            const orderId = id;
+            const { actor } = data || {};
+
+            if (!orderId || !actor) {
+                return res.status(400).json({ error: 'Order ID и actor обязательны' });
+            }
+
+            const actorRes = await pool.query('SELECT role FROM users WHERE username = $1', [actor]);
+            if (actorRes.rows[0]?.role !== 'admin') {
+                return res.status(403).json({ error: 'Отменять заказы таким способом может только администратор' });
+            }
+
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+                const orderRes = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [orderId]);
+                if (orderRes.rows.length === 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(404).json({ error: 'Заказ не найден' });
+                }
+                const order = orderRes.rows[0];
+                if (order.status === 'completed' || order.status === 'cancelled') {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ error: 'Заказ уже выдан или отменён' });
+                }
+
+                await client.query(
+                    `UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE id = $1`,
+                    [orderId]
+                );
+
+                const items = order.items;
+                for (const item of items) {
+                    await client.query(
+                        `UPDATE products SET stock = stock + $1 WHERE id = $2`,
+                        [item.quantity, item.productId]
+                    );
+                }
+
+                // При оплате с баланса — деньги возвращаются покупателю
+                if (order.payment_method === 'balance') {
+                    await adjustBalance(client, order.buyer, Number(order.total_ar));
+                    await logTransaction(client, order.buyer, 'refund', Number(order.total_ar), `Возврат за заказ #${orderId}, отменённый администратором (тех. неполадки)`);
+                }
+
+                await client.query('COMMIT');
+            } catch (err) {
+                await client.query('ROLLBACK');
+                throw err;
+            } finally {
+                client.release();
+            }
+
+            console.log('✅ Заказ отменён администратором (тех. неполадки):', orderId, actor);
+            return res.status(200).json({
+                success: true,
+                message: 'Заказ отменён из-за технических неполадок. Товары возвращены на склад.'
+            });
         }
 
         // ===== ОФОРМЛЕНИЕ ЗАКАЗА (атомарно: склад + баланс + корзина) =====
