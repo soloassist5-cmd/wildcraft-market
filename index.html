@@ -42,6 +42,7 @@
         @keyframes badgePulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.35); } 50% { box-shadow: 0 0 0 5px rgba(245, 158, 11, 0); } }
         .badge-danger { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
         .badge-info { background: rgba(6, 182, 212, 0.15); color: var(--secondary); }
+        .badge-primary { background: rgba(124, 58, 237, 0.15); color: var(--accent); }
         .empty-state { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
         .empty-state i { font-size: 56px; color: var(--text-muted); margin-bottom: 16px; display: block; }
         .empty-state h3 { font-size: 18px; color: var(--text-primary); margin-bottom: 8px; }
@@ -73,6 +74,10 @@
         .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
         .btn-success { background: rgba(34, 197, 94, 0.15); color: var(--success); border: 1px solid rgba(34, 197, 94, 0.15); }
         .btn-success:hover { background: rgba(34, 197, 94, 0.25); }
+        .btn-warning { background: rgba(245, 158, 11, 0.15); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.15); }
+        .btn-warning:hover { background: rgba(245, 158, 11, 0.25); }
+        .btn-info { background: rgba(6, 182, 212, 0.15); color: var(--secondary); border: 1px solid rgba(6, 182, 212, 0.15); }
+        .btn-info:hover { background: rgba(6, 182, 212, 0.25); }
         .btn-sm { padding: 5px 12px; font-size: 12px; }
         .btn-block { width: 100%; justify-content: center; }
         .main { margin-top: var(--header-height); padding: 24px 0 60px; min-height: calc(100vh - var(--header-height)); transition: margin-top 0.15s var(--transition); }
@@ -220,60 +225,18 @@
         .courier-profile-stats .stat-item { text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.03); border-radius: var(--radius-sm); }
         .courier-profile-stats .stat-item .value { font-size: 24px; font-weight: 800; color: var(--warning); }
         .courier-profile-stats .stat-item .label { font-size: 12px; color: var(--text-secondary); }
+        .staff-order-group { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 12px; }
+        .staff-order-group .pickup-title { font-size: 16px; font-weight: 700; color: var(--secondary); margin-bottom: 10px; }
+        .staff-order-item-inner { background: rgba(255, 255, 255, 0.02); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
 
-        /* ===== КАСТОМНЫЙ СЕЛЕКТ В ТЁМНОЙ ТЕМЕ ===== */
-        .select-wrap {
-            position: relative;
-            display: inline-block;
-            min-width: 200px;
-        }
-        .select-wrap select {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            color: var(--text-primary);
-            padding: 10px 40px 10px 16px;
-            border-radius: var(--radius-sm);
-            font-family: inherit;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            appearance: none;
-            -webkit-appearance: none;
-            width: 100%;
-            transition: all 0.25s var(--transition);
-        }
-        .select-wrap select:hover {
-            border-color: rgba(124, 58, 237, 0.25);
-            background: rgba(255, 255, 255, 0.08);
-        }
-        .select-wrap select:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
-        }
-        .select-wrap::after {
-            content: '\25BC';
-            position: absolute;
-            right: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-secondary);
-            font-size: 10px;
-            pointer-events: none;
-            transition: transform 0.2s var(--transition);
-        }
-        .select-wrap select:focus ~ .select-wrap::after {
-            transform: translateY(-50%) rotate(180deg);
-        }
-        select option {
-            background: #0e1626 !important;
-            color: #f1f5f9 !important;
-            padding: 8px 12px !important;
-        }
-        select option:hover,
-        select option:checked {
-            background: rgba(124, 58, 237, 0.2) !important;
-        }
+        .select-wrap { position: relative; display: inline-block; min-width: 200px; }
+        .select-wrap select { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); color: var(--text-primary); padding: 10px 40px 10px 16px; border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; appearance: none; -webkit-appearance: none; width: 100%; transition: all 0.25s var(--transition); }
+        .select-wrap select:hover { border-color: rgba(124, 58, 237, 0.25); background: rgba(255, 255, 255, 0.08); }
+        .select-wrap select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15); }
+        .select-wrap::after { content: '\25BC'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 10px; pointer-events: none; transition: transform 0.2s var(--transition); }
+        .select-wrap select:focus~.select-wrap::after { transform: translateY(-50%) rotate(180deg); }
+        select option { background: #0e1626 !important; color: #f1f5f9 !important; padding: 8px 12px !important; }
+        select option:hover, select option:checked { background: rgba(124, 58, 237, 0.2) !important; }
 
         @media (max-width: 768px) {
             .header-inner { flex-direction: column; align-items: stretch; gap: 8px; }
@@ -322,6 +285,7 @@
                 <button data-page="wishlist"><i class="fas fa-heart"></i> Избранное</button>
                 <button data-page="rules"><i class="fas fa-gavel"></i> Правила</button>
                 <button data-page="courier" id="navCourierBtn" style="display:none;"><i class="fas fa-truck"></i> Доставка</button>
+                <button data-page="staff" id="navStaffBtn" style="display:none;"><i class="fas fa-warehouse"></i> ПВЗ</button>
             </nav>
             <div class="nav-right">
                 <span class="balance-badge" id="balanceBadge" style="display:none;" onclick="switchPage('wallet')" title="Открыть кошелёк">
@@ -438,13 +402,27 @@
             <section class="page" id="page-courier">
                 <div class="page-header">
                     <h1>🚚 Доставка</h1>
-                    <p>Заказы, готовые к выдаче в пунктах выдачи</p>
+                    <p>Заказы, готовые к передаче курьеру</p>
                 </div>
                 <div id="courierContent">
                     <div class="empty-state">
                         <i class="fas fa-truck"></i>
                         <h3>Нет заказов для доставки</h3>
-                        <p>Все заказы уже выданы или ещё не готовы</p>
+                        <p>Все заказы уже в пути или доставлены</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="page" id="page-staff">
+                <div class="page-header">
+                    <h1>🏢 Пункт выдачи заказов (ПВЗ)</h1>
+                    <p>Заказы, готовые к выдаче покупателям</p>
+                </div>
+                <div id="staffContent">
+                    <div class="empty-state">
+                        <i class="fas fa-warehouse"></i>
+                        <h3>Нет заказов для выдачи</h3>
+                        <p>Все заказы уже выданы или ещё не доставлены в ПВЗ</p>
                     </div>
                 </div>
             </section>
@@ -488,6 +466,7 @@
                         <option value="buyer">Покупатель</option>
                         <option value="seller">Продавец</option>
                         <option value="courier">Курьер</option>
+                        <option value="staff">Сотрудник ПВЗ</option>
                     </select>
                 </div>
                 <button type="submit" class="btn btn-primary btn-block" id="loginSubmitBtn">Войти</button>
@@ -684,6 +663,17 @@
             'Другое': '📦'
         };
 
+        // Статусы заказов
+        const ORDER_STATUSES = {
+            'pending': { label: '⏳ Ожидает', color: 'badge-warning' },
+            'processing': { label: '🔄 В обработке', color: 'badge-info' },
+            'ready_for_courier': { label: '🚚 Готов к передаче', color: 'badge-primary' },
+            'in_transit': { label: '🚛 В пути', color: 'badge-info' },
+            'ready_for_pickup': { label: '📦 Готов к выдаче', color: 'badge-success' },
+            'completed': { label: '✅ Выдан', color: 'badge-success' },
+            'cancelled': { label: '❌ Отменён', color: 'badge-danger' }
+        };
+
         // ============================================================
         // API
         // ============================================================
@@ -793,9 +783,6 @@
         async function adminResetBalanceDB(username, actor) {
             return apiCall('adminResetBalance', 'balances', { username, actor });
         }
-        async function adminCancelOrderDB(orderId, actor) {
-            return apiCall('adminCancelOrder', 'orders', { actor }, orderId);
-        }
         async function placeOrderDB(payload) {
             return apiCall('placeOrder', 'orders', payload);
         }
@@ -821,8 +808,11 @@
         async function getCourierOrders() {
             return apiCall('getCourierOrders');
         }
-        async function courierCompleteOrder(orderId, courier, pickup) {
-            return apiCall('courierCompleteOrder', null, { orderId, courier, pickup });
+        async function getStaffOrders() {
+            return apiCall('getStaffOrders');
+        }
+        async function updateOrderStatus(orderId, status, actor, role) {
+            return apiCall('updateOrderStatus', 'orders', { actor, status, role }, orderId);
         }
         async function archiveOrders() {
             return apiCall('archiveOrders');
@@ -1000,13 +990,13 @@
                     password,
                     role: role,
                     shop_id: null,
-                    approved: role === 'buyer' || role === 'courier' ? true : false,
+                    approved: role === 'buyer' || role === 'courier' || role === 'staff' ? true : false,
                     pending: role === 'seller' ? true : false,
                     blocked: false
                 };
                 users.push(newUser);
                 await setUsers(users);
-                if (role === 'buyer' || role === 'courier') {
+                if (role === 'buyer' || role === 'courier' || role === 'staff') {
                     setCurrentUser({ username, role });
                     showToast('Добро пожаловать, ' + username + '!', 'success');
                     document.getElementById('loginModal').classList.remove('open');
@@ -1163,6 +1153,74 @@
                 }
             }
         });
+
+        // ============================================================
+        // ОБНОВЛЕНИЕ СТАТУСА ЗАКАЗА (НОВАЯ ФУНКЦИЯ)
+        // ============================================================
+        window.updateOrderStatus = async function(orderId, status, btnEl) {
+            const user = getCurrentUser();
+            if (!user) {
+                showToast('Войдите в аккаунт!', 'error');
+                return;
+            }
+
+            const btn = btnEl || (window.event && window.event.target && window.event.target.closest('button'));
+            const originalHtml = btn ? btn.innerHTML : null;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Обновляем...';
+            }
+
+            try {
+                const result = await updateOrderStatus(orderId, status, user.username, user.role);
+                if (!result || result.error) {
+                    throw new Error((result && result.error) || 'Не удалось обновить статус');
+                }
+                const statusLabels = {
+                    'processing': 'В обработке',
+                    'ready_for_courier': 'Готов к передаче курьеру',
+                    'in_transit': 'В пути',
+                    'ready_for_pickup': 'Готов к выдаче',
+                    'completed': 'Выдан'
+                };
+                showToast('📦 Статус заказа обновлён: ' + (statusLabels[status] || status), 'success');
+                renderUI();
+            } catch (error) {
+                console.error('Ошибка обновления статуса заказа:', error);
+                showToast('❌ Ошибка: ' + error.message, 'error');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            }
+        };
+
+        // ============================================================
+        // ОТМЕНА ЗАКАЗА (ПОКУПАТЕЛЬ)
+        // ============================================================
+        window.cancelOrder = async function(orderId) {
+            const user = getCurrentUser();
+            if (!user) {
+                showToast('Войдите в аккаунт!', 'warning');
+                return;
+            }
+            if (!confirm('❓ Вы уверены, что хотите отменить заказ #' + orderId +
+                    '?\n\nТовары будут возвращены на склад.'))
+                return;
+            try {
+                const result = await updateOrderStatus(orderId, 'cancelled', user.username, user.role);
+                if (result.success) {
+                    showToast('✅ Заказ отменён! Товары возвращены на склад.', 'success');
+                    renderUI();
+                }
+            } catch (error) {
+                if (error.message.includes('15 минут')) {
+                    showToast('❌ ' + error.message, 'error');
+                } else {
+                    showToast('❌ ' + error.message, 'error');
+                }
+            }
+        };
 
         // ============================================================
         // АДМИН-ПАНЕЛЬ
@@ -1406,8 +1464,6 @@
                 }
 
                 if (data.orders.length > 0) {
-                    const statusLabels = { 'pending': '⏳ Ожидает', 'processing': '🔄 В обработке', 'ready': '✅ Готов',
-                        'completed': '📦 Выдан', 'cancelled': '❌ Отменён' };
                     html += `
                             <div class="profile-card">
                                 <div class="card-title">📦 Заказы (${data.orders.length})</div>
@@ -1418,7 +1474,7 @@
                                             <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
                                             <div class="pickup">📍 ${o.pickup}</div>
                                             <div class="total">${o.total_ar.toFixed(2)} АР</div>
-                                            <span class="badge ${o.status === 'completed' ? 'badge-success' : o.status === 'cancelled' ? 'badge-danger' : 'badge-warning'}">${statusLabels[o.status] || o.status}</span>
+                                            <span class="badge ${ORDER_STATUSES[o.status]?.color || 'badge-warning'}">${ORDER_STATUSES[o.status]?.label || o.status}</span>
                                         </div>
                                     `).join('')}
                                 ${data.orders.length > 20 ? `<p style="color:var(--text-secondary);font-size:13px;">... и ещё ${data.orders.length - 20} заказов</p>` : ''}
@@ -1496,6 +1552,7 @@
                                             <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
                                             <div class="pickup">📍 ${o.pickup}</div>
                                             <div class="total">${o.total_ar.toFixed(2)} АР</div>
+                                            <span class="badge ${ORDER_STATUSES[o.status]?.color || 'badge-warning'}">${ORDER_STATUSES[o.status]?.label || o.status}</span>
                                         </div>
                                     `).join('')}
                                 ${data.orders.length > 20 ? `<p style="color:var(--text-secondary);font-size:13px;">... и ещё ${data.orders.length - 20} доставок</p>` : ''}
@@ -1633,7 +1690,7 @@
                             <div class="empty-state">
                                 <i class="fas fa-truck"></i>
                                 <h3>Нет заказов для доставки</h3>
-                                <p>Все заказы уже выданы или ещё не готовы</p>
+                                <p>Все заказы уже в пути или доставлены</p>
                             </div>
                         `;
                     return;
@@ -1651,8 +1708,8 @@
                                                 <div style="font-size:12px;color:var(--text-secondary);">💰 ${o.total_ar.toFixed(2)} АР · ${o.payment_method === 'balance' ? '💳 Оплачено' : '💵 При получении'}</div>
                                                 <div style="font-size:12px;color:var(--accent);"><i class="fas fa-map-marker-alt"></i> Доставить в: ${o.pickup}</div>
                                             </div>
-                                            <button class="btn btn-success btn-sm" onclick="deliverOrder('${o.id}', '${pickup}')">
-                                                <i class="fas fa-hand-holding"></i> Выдать
+                                            <button class="btn btn-warning btn-sm" onclick="updateOrderStatus('${o.id}', 'in_transit', this)">
+                                                <i class="fas fa-truck"></i> Взять в доставку
                                             </button>
                                         </div>
                                     `).join('')}
@@ -1667,23 +1724,62 @@
             }
         }
 
-        window.deliverOrder = async function(orderId, pickup) {
+        // ============================================================
+        // СОТРУДНИК ПВЗ
+        // ============================================================
+        async function renderStaff() {
+            const container = document.getElementById('staffContent');
             const user = getCurrentUser();
-            if (!user || user.role !== 'courier') {
-                showToast('Только курьер может выдавать заказы!', 'error');
+            if (!user || (user.role !== 'staff' && user.role !== 'admin')) {
+                container.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-warehouse"></i>
+                            <h3>Только для сотрудников ПВЗ</h3>
+                            <p>Войдите как сотрудник ПВЗ, чтобы видеть заказы для выдачи</p>
+                        </div>
+                    `;
                 return;
             }
-            if (!confirm(`Выдать заказ #${orderId} на ПВЗ "${pickup}"?`)) return;
             try {
-                const result = await courierCompleteOrder(orderId, user.username, pickup);
-                if (result && result.error) throw new Error(result.error);
-                showToast('✅ Заказ выдан! Комиссия 1 АР начислена.', 'success');
-                renderCourier();
-                renderUI();
+                const data = await getStaffOrders();
+                if (data.total === 0) {
+                    container.innerHTML = `
+                            <div class="empty-state">
+                                <i class="fas fa-warehouse"></i>
+                                <h3>Нет заказов для выдачи</h3>
+                                <p>Все заказы уже выданы или ещё не доставлены в ПВЗ</p>
+                            </div>
+                        `;
+                    return;
+                }
+                let html = `<p style="color:var(--text-secondary);margin-bottom:16px;">📦 Заказов для выдачи: ${data.total}</p>`;
+                for (const [pickup, orders] of Object.entries(data.grouped)) {
+                    html += `
+                            <div class="staff-order-group">
+                                <div class="pickup-title">📍 Пункт выдачи: ${pickup}</div>
+                                ${orders.map(o => `
+                                        <div class="staff-order-item-inner">
+                                            <div>
+                                                <div><strong>#${o.id}</strong> · 👤 ${o.buyer} → 🏪 ${o.seller}</div>
+                                                <div style="font-size:12px;color:var(--text-secondary);">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
+                                                <div style="font-size:12px;color:var(--text-secondary);">💰 ${o.total_ar.toFixed(2)} АР · ${o.payment_method === 'balance' ? '💳 Оплачено' : '💵 Оплата при получении'}</div>
+                                                <div style="font-size:12px;color:var(--secondary);"><i class="fas fa-box"></i> Готов к выдаче</div>
+                                            </div>
+                                            <button class="btn btn-success btn-sm" onclick="updateOrderStatus('${o.id}', 'completed', this)">
+                                                <i class="fas fa-hand-holding"></i> Выдать заказ
+                                            </button>
+                                        </div>
+                                    `).join('')}
+                            </div>
+                        `;
+                }
+                container.innerHTML = html;
             } catch (error) {
-                showToast('❌ Ошибка: ' + error.message, 'error');
+                console.error('Ошибка загрузки заказов для ПВЗ:', error);
+                container.innerHTML =
+                    `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>Ошибка загрузки</h3><p>${error.message}</p></div>`;
             }
-        };
+        }
 
         // ============================================================
         // АРХИВ ЗАКАЗОВ
@@ -1703,8 +1799,6 @@
                 if (archiveData.length === 0) {
                     content.innerHTML = '<p style="color:var(--text-secondary);">Архив пуст</p>';
                 } else {
-                    const statusLabels = { 'pending': '⏳ Ожидает', 'processing': '🔄 В обработке', 'ready': '✅ Готов',
-                        'completed': '📦 Выдан', 'cancelled': '❌ Отменён' };
                     content.innerHTML = archiveData.slice().reverse().map(o => `
                             <div class="order-item">
                                 <div class="header"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at).toLocaleString()}</span></div>
@@ -1713,7 +1807,7 @@
                                 <div class="pickup">📍 ${o.pickup}</div>
                                 <div class="flex-between" style="margin-top:6px;">
                                     <span class="total">${o.total_ar.toFixed(2)} АР</span>
-                                    <span class="badge ${o.status === 'completed' ? 'badge-success' : 'badge-danger'}">${statusLabels[o.status] || o.status}</span>
+                                    <span class="badge ${ORDER_STATUSES[o.status]?.color || 'badge-warning'}">${ORDER_STATUSES[o.status]?.label || o.status}</span>
                                 </div>
                                 <div style="font-size:11px;color:var(--text-secondary);">Архивирован: ${new Date(o.archived_at).toLocaleString()}</div>
                             </div>
@@ -1845,80 +1939,6 @@
                 renderUI();
             } catch (error) {
                 showToast('❌ ' + error.message, 'error');
-            }
-        };
-
-        window.adminCancelOrder = async function(orderId) {
-            const user = getCurrentUser();
-            if (!user || user.role !== 'admin') {
-                showToast('Только администратор может отменять заказы так!', 'error');
-                return;
-            }
-            if (!confirm(
-                    '❓ Отменить заказ #' + orderId +
-                    ' из-за технических неполадок?\n\nТовары будут возвращены на склад, а деньги (если оплачено с баланса) — покупателю.'
-                    ))
-                return;
-            try {
-                const result = await adminCancelOrderDB(orderId, user.username);
-                if (!result || result.error) throw new Error((result && result.error) || 'Ошибка отмены заказа');
-                showToast('✅ Заказ #' + orderId + ' отменён из-за технических неполадок', 'success');
-                renderUI();
-            } catch (error) {
-                showToast('❌ ' + error.message, 'error');
-            }
-        };
-
-        window.cancelOrder = async function(orderId) {
-            const user = getCurrentUser();
-            if (!user) {
-                showToast('Войдите в аккаунт!', 'warning');
-                return;
-            }
-            if (!confirm('❓ Вы уверены, что хотите отменить заказ #' + orderId +
-                    '?\n\nТовары будут возвращены на склад.'))
-                return;
-            try {
-                const result = await apiCall('cancelOrder', 'orders', { buyer: user.username }, orderId);
-                if (result.success) {
-                    showToast('✅ Заказ отменён! Товары возвращены на склад.', 'success');
-                    renderUI();
-                }
-            } catch (error) {
-                if (error.message.includes('15 минут')) {
-                    showToast('❌ ' + error.message, 'error');
-                } else {
-                    showToast('❌ ' + error.message, 'error');
-                }
-            }
-        };
-
-        window.updateOrderStatus = async function(orderId, status, btnEl) {
-            const user = getCurrentUser();
-            if (!user || user.role !== 'seller') {
-                showToast('Только продавец может изменять статус заказа!', 'error');
-                return;
-            }
-            const btn = btnEl || (window.event && window.event.target && window.event.target.closest('button'));
-            const originalHtml = btn ? btn.innerHTML : null;
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Обновляем...';
-            }
-            try {
-                const result = await apiCall('updateOrderStatus', 'orders', { seller: user.username, status }, orderId);
-                if (!result || result.error) {
-                    throw new Error((result && result.error) || 'Не удалось обновить статус');
-                }
-                showToast('📦 Статус заказа обновлён: ' + status, 'success');
-                renderUI();
-            } catch (error) {
-                console.error('Ошибка обновления статуса заказа:', error);
-                showToast('❌ Ошибка: ' + error.message, 'error');
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = originalHtml;
-                }
             }
         };
 
@@ -2095,8 +2115,49 @@
         });
 
         // ============================================================
-        // ИЗБРАННОЕ (ИСПРАВЛЕНО)
+        // ИЗБРАННОЕ (НОВАЯ ВЕРСИЯ)
         // ============================================================
+        async function handleWishlistToggle(productId, btnElement) {
+            const user = getCurrentUser();
+            if (!user) {
+                showToast('Войдите, чтобы добавлять в избранное', 'warning');
+                btnElement.classList.remove('liked');
+                openLogin();
+                return;
+            }
+
+            try {
+                let wishlist = await getWishlist(user.username);
+                const wishlistStr = wishlist.map(id => String(id));
+                const productIdStr = String(productId);
+                const idx = wishlistStr.indexOf(productIdStr);
+
+                if (idx === -1) {
+                    wishlist.push(productId);
+                    btnElement.classList.add('liked');
+                    showToast('❤️ Добавлено в избранное', 'success');
+                } else {
+                    wishlist.splice(idx, 1);
+                    btnElement.classList.remove('liked');
+                    showToast('Удалено из избранного', 'info');
+                }
+
+                await setWishlist(user.username, wishlist);
+                await renderWishlist();
+
+            } catch (error) {
+                console.error('Ошибка работы с избранным:', error);
+                const currentWishlist = await getWishlist(user.username);
+                const currentStr = currentWishlist.map(id => String(id));
+                if (currentStr.includes(String(productId))) {
+                    btnElement.classList.add('liked');
+                } else {
+                    btnElement.classList.remove('liked');
+                }
+                showToast('❌ Ошибка: ' + error.message, 'error');
+            }
+        }
+
         window.toggleWishlist = async function(productId) {
             const user = getCurrentUser();
             if (!user) {
@@ -2112,7 +2173,7 @@
 
                 if (idx === -1) {
                     wishlist.push(productId);
-                    showToast('Добавлено в избранное ❤️', 'success');
+                    showToast('❤️ Добавлено в избранное', 'success');
                 } else {
                     wishlist.splice(idx, 1);
                     showToast('Удалено из избранного', 'info');
@@ -2279,6 +2340,7 @@
             const balanceAmount = document.getElementById('balanceAmount');
             const navWalletBtn = document.getElementById('navWalletBtn');
             const navCourierBtn = document.getElementById('navCourierBtn');
+            const navStaffBtn = document.getElementById('navStaffBtn');
 
             if (user) {
                 const isBlocked = await isUserBlocked(user.username);
@@ -2290,6 +2352,7 @@
                 authBtn.onclick = logout;
                 navWalletBtn.style.display = '';
                 navCourierBtn.style.display = user.role === 'courier' ? '' : 'none';
+                navStaffBtn.style.display = (user.role === 'staff' || user.role === 'admin') ? '' : 'none';
                 balanceBadge.style.display = 'inline-flex';
                 balanceAmount.textContent = (await getBalanceFor(user.username)).toFixed(2);
             } else {
@@ -2299,6 +2362,7 @@
                 authBtn.onclick = openLogin;
                 navWalletBtn.style.display = 'none';
                 navCourierBtn.style.display = 'none';
+                navStaffBtn.style.display = 'none';
                 balanceBadge.style.display = 'none';
             }
 
@@ -2314,6 +2378,7 @@
             await renderFilters();
             await renderWallet();
             await renderCourier();
+            await renderStaff();
             if (user && user.role === 'admin') {
                 await renderAdminSessions();
             }
@@ -2398,9 +2463,11 @@
                 const inWishlist = wishlistStr.includes(String(p.id));
 
                 html += `
-                        <div class="product-card">
+                        <div class="product-card" data-product-id="${p.id}">
                             ${isAdmin ? `<button class="admin-delete-btn" onclick="deleteProduct('${p.id}', true)" title="Удалить товар (админ)"><i class="fas fa-trash-alt"></i></button>` : ''}
-                            <button class="wishlist-btn ${inWishlist ? 'liked' : ''}" onclick="toggleWishlist('${p.id}')" title="В избранное"><i class="fas fa-heart"></i></button>
+                            <button class="wishlist-btn ${inWishlist ? 'liked' : ''}" data-product-id="${p.id}" title="В избранное">
+                                <i class="fas fa-heart"></i>
+                            </button>
                             <span class="icon">${p.icon || '📦'}</span>
                             <div class="name">${p.name}</div>
                             <div class="shop-name"><i class="fas fa-store-alt"></i> ${p.shop_name}</div>
@@ -2418,7 +2485,7 @@
                                         <button class="btn btn-secondary btn-sm" onclick="showToast('Редактирование в разработке','info')"><i class="fas fa-edit"></i></button>
                                         <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}', false)"><i class="fas fa-trash"></i></button>
                                     ` : `
-                                        <button class="btn btn-primary btn-sm" onclick="addToCart('${p.id}')" ${p.stock <= 0 ? 'disabled style="opacity:0.5;"' : ''}>
+                                        <button class="btn btn-primary btn-sm add-to-cart-btn" data-product-id="${p.id}" ${p.stock <= 0 ? 'disabled style="opacity:0.5;"' : ''}>
                                             <i class="fas fa-cart-plus"></i> В корзину
                                         </button>
                                     `}
@@ -2428,6 +2495,28 @@
             }
 
             grid.innerHTML = html;
+
+            // Обработчики для избранного
+            grid.querySelectorAll('.wishlist-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const productId = this.dataset.productId;
+                    if (!productId) return;
+                    this.classList.toggle('liked');
+                    handleWishlistToggle(productId, this);
+                });
+            });
+
+            grid.querySelectorAll('.add-to-cart-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const productId = this.dataset.productId;
+                    if (!productId) return;
+                    addToCart(productId);
+                });
+            });
         }
 
         // ============================================================
@@ -2528,8 +2617,10 @@
             for (const p of products) {
                 const priceDiamonds = (p.price_ar * AR_TO_DIAMONDS).toFixed(2);
                 html += `
-                        <div class="product-card">
-                            <button class="wishlist-btn liked" onclick="toggleWishlist('${p.id}')" title="Удалить из избранного"><i class="fas fa-heart"></i></button>
+                        <div class="product-card" data-product-id="${p.id}">
+                            <button class="wishlist-btn liked" data-product-id="${p.id}" title="Удалить из избранного">
+                                <i class="fas fa-heart"></i>
+                            </button>
                             <span class="icon">${p.icon || '📦'}</span>
                             <div class="name">${p.name}</div>
                             <div class="shop-name"><i class="fas fa-store-alt"></i> ${p.shop_name}</div>
@@ -2538,13 +2629,36 @@
                             <div class="price-alt">💎 ${priceDiamonds} алмазов</div>
                             <div class="stock">📦 В наличии: ${p.stock}</div>
                             <div class="actions">
-                                <button class="btn btn-primary btn-sm" onclick="addToCart('${p.id}')"><i class="fas fa-cart-plus"></i> В корзину</button>
+                                <button class="btn btn-primary btn-sm add-to-cart-btn" data-product-id="${p.id}">
+                                    <i class="fas fa-cart-plus"></i> В корзину
+                                </button>
                             </div>
                         </div>
                     `;
             }
 
             container.innerHTML = html;
+
+            container.querySelectorAll('.wishlist-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const productId = this.dataset.productId;
+                    if (!productId) return;
+                    this.classList.remove('liked');
+                    handleWishlistToggle(productId, this);
+                });
+            });
+
+            container.querySelectorAll('.add-to-cart-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const productId = this.dataset.productId;
+                    if (!productId) return;
+                    addToCart(productId);
+                });
+            });
         }
 
         // ============================================================
@@ -2607,6 +2721,7 @@
                 const allUsers = await getUsers();
                 const sellers = allUsers.filter(u => u.role === 'seller');
                 const couriers = allUsers.filter(u => u.role === 'courier');
+                const staffMembers = allUsers.filter(u => u.role === 'staff');
                 const bannedUsers = await getBannedUsers();
                 const allProducts = await getProducts();
                 const allBalances = await getBalances();
@@ -2734,12 +2849,38 @@
                 html += `
                                 </div>
                             </div>
+
+                            <!-- Управление сотрудниками ПВЗ -->
+                            <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                                <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-warehouse"></i> Сотрудники ПВЗ</h4>
+                                <div style="display:flex;flex-direction:column;gap:6px;">
+                    `;
+
+                if (staffMembers.length === 0) {
+                    html += `<p style="color:var(--text-secondary);font-size:13px;">Нет сотрудников ПВЗ</p>`;
+                } else {
+                    for (const s of staffMembers) {
+                        if (s.username === STAFF_USERNAME) continue;
+                        const isBanned = bannedUsers.includes(s.username);
+                        html += `
+                                    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:rgba(255,255,255,0.02);border-radius:8px;flex-wrap:wrap;gap:4px;">
+                                        <span style="font-weight:500;">📮 ${s.username}</span>
+                                        <span class="badge badge-success">✅ Активен</span>
+                                        <button class="btn ${isBanned ? 'btn-success' : 'btn-danger'} btn-sm" onclick="toggleBlockUser('${s.username}')">${isBanned ? '🔓 Разблокировать' : '🔒 Заблокировать'}</button>
+                                        <button class="btn btn-danger btn-sm" onclick="deleteUserDB('${s.username}')" style="background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.2);"><i class="fas fa-user-slash"></i> Удалить</button>
+                                    </div>
+                                `;
+                    }
+                }
+
+                html += `
+                                </div>
+                            </div>
                     `;
 
                 // Управление покупателями
                 const buyers = allUsers.filter(u => u.role === 'buyer');
-                const activeStatuses = ['pending', 'processing', 'ready'];
-                const activeStatusLabels = { pending: '⏳ Ожидает', processing: '🔄 В обработке', ready: '✅ Готов к выдаче' };
+                const activeStatuses = ['pending', 'processing', 'ready_for_courier', 'in_transit', 'ready_for_pickup'];
 
                 html += `
                         <details class="tx-log buyers-panel">
@@ -2759,7 +2900,7 @@
                                             <div>
                                                 <div style="font-weight:600;">🛒 ${b.username}</div>
                                                 <div style="font-size:13px;color:var(--secondary);margin-top:2px;">🟣 Баланс: ${buyerBalance.toFixed(2)} АР</div>
-                                                ${activeOrders.length > 0 ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Действующие заказы: ${activeOrders.map(o => `#${o.id} (${activeStatusLabels[o.status] || o.status})`).join(', ')}</div>` : ''}
+                                                ${activeOrders.length > 0 ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Действующие заказы: ${activeOrders.map(o => `#${o.id} (${ORDER_STATUSES[o.status]?.label || o.status})`).join(', ')}</div>` : ''}
                                             </div>
                                             <button class="btn btn-danger btn-sm" onclick="adminResetBalance('${b.username}')" ${buyerBalance === 0 ? 'disabled' : ''}><i class="fas fa-ban"></i> Обнулить баланс</button>
                                         </div>
@@ -2770,8 +2911,7 @@
                             for (const o of activeOrders) {
                                 html += `
                                             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;padding:6px 10px;background:rgba(255,255,255,0.02);border-radius:6px;font-size:13px;">
-                                                <span>#${o.id} · ${activeStatusLabels[o.status] || o.status} · 🏪 ${o.seller} · ${o.currency === 'AR' ? '🟣 ' + o.total_ar.toFixed(2) + ' АР' : '💎 ' + o.total_diamonds.toFixed(2) + ' алм'}</span>
-                                                <button class="btn btn-danger btn-sm" onclick="adminCancelOrder('${o.id}')" style="font-size:11px;padding:3px 8px;"><i class="fas fa-times"></i> Отменить (тех. неполадки)</button>
+                                                <span>#${o.id} · ${ORDER_STATUSES[o.status]?.label || o.status} · 🏪 ${o.seller} · ${o.currency === 'AR' ? '🟣 ' + o.total_ar.toFixed(2) + ' АР' : '💎 ' + o.total_diamonds.toFixed(2) + ' алм'}</span>
                                             </div>
                                         `;
                             }
@@ -2893,16 +3033,12 @@
                         `;
 
                     if (sellerOrders.length > 0) {
-                        const statusLabels = { 'pending': '⏳ Ожидает', 'processing': '🔄 В обработке',
-                            'ready': '✅ Готов', 'completed': '📦 Выдан', 'cancelled': '❌ Отменён' };
-                        const statusColors = { 'pending': 'badge-warning', 'processing': 'badge-info',
-                            'ready': 'badge-success', 'completed': 'badge-success', 'cancelled': 'badge-danger' };
-
                         html += `
                                 <div class="profile-card"><div class="card-title">📦 Заказы (${sellerOrders.length})</div><div style="display:flex;flex-direction:column;gap:10px;">
                             `;
 
                         for (const o of sellerOrders.slice().reverse()) {
+                            const canSendToCourier = o.status === 'processing';
                             html += `
                                     <div class="order-item">
                                         <div class="header"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at || Date.now()).toLocaleString()}</span></div>
@@ -2911,13 +3047,14 @@
                                         <div class="pickup">📍 ${o.pickup}</div>
                                         <div class="flex-between" style="margin-top:6px;">
                                             <span class="total">${o.currency === 'AR' ? '🟣' : '💎'} ${o.currency === 'AR' ? o.total_ar.toFixed(2) + ' АР' : o.total_diamonds.toFixed(2) + ' алм'}</span>
-                                            <span class="badge ${statusColors[o.status] || 'badge-warning'}">${statusLabels[o.status] || o.status}</span>
+                                            <span class="badge ${ORDER_STATUSES[o.status]?.color || 'badge-warning'}">${ORDER_STATUSES[o.status]?.label || o.status}</span>
                                         </div>
                                         <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">${o.payment_method === 'balance' ? '💳 Оплачен с баланса' : '💵 Оплата при получении'}</div>
                                         <div class="status-actions">
                                             ${o.status === 'pending' ? `<button class="btn btn-info btn-sm" onclick="updateOrderStatus('${o.id}', 'processing', this)">🔄 Взять в работу</button>` : ''}
-                                            ${o.status === 'processing' ? `<button class="btn btn-success btn-sm" onclick="updateOrderStatus('${o.id}', 'ready', this)">✅ Готов к выдаче</button>` : ''}
-                                            ${o.status === 'ready' ? `<span style="font-size:12px;color:var(--text-secondary);"><i class="fas fa-map-marker-alt"></i> Ожидает выдачи в ПВЗ (${o.pickup})</span>` : ''}
+                                            ${canSendToCourier ? `<button class="btn btn-warning btn-sm" onclick="updateOrderStatus('${o.id}', 'ready_for_courier', this)"><i class="fas fa-truck"></i> Передать курьеру</button>` : ''}
+                                            ${o.status === 'ready_for_courier' ? `<span style="font-size:12px;color:var(--text-secondary);"><i class="fas fa-clock"></i> Ожидает курьера</span>` : ''}
+                                            ${o.status === 'in_transit' ? `<span style="font-size:12px;color:var(--secondary);"><i class="fas fa-truck"></i> В пути (курьер: ${o.courier || 'не назначен'})</span>` : ''}
                                         </div>
                                     </div>
                                 `;
@@ -2930,11 +3067,6 @@
 
             // ===== ПОКУПАТЕЛЬ (заказы) =====
             if (buyerOrders.length > 0) {
-                const statusLabels = { 'pending': '⏳ Ожидает', 'processing': '🔄 В обработке', 'ready': '✅ Готов',
-                    'completed': '📦 Выдан', 'cancelled': '❌ Отменён' };
-                const statusColors = { 'pending': 'badge-warning', 'processing': 'badge-info', 'ready': 'badge-success',
-                    'completed': 'badge-success', 'cancelled': 'badge-danger' };
-
                 html += `
                         <div class="profile-card"><div class="card-title">📜 Мои заказы (${buyerOrders.length})</div>
                         <button class="btn btn-secondary btn-sm" onclick="openArchive()" style="margin-bottom:12px;"><i class="fas fa-archive"></i> Архив</button>
@@ -2956,7 +3088,7 @@
                                 <div class="pickup">📍 ${o.pickup}</div>
                                 <div class="flex-between" style="margin-top:6px;">
                                     <span class="total">${o.currency === 'AR' ? '🟣' : '💎'} ${o.currency === 'AR' ? o.total_ar.toFixed(2) + ' АР' : o.total_diamonds.toFixed(2) + ' алм'}</span>
-                                    <span class="badge ${statusColors[o.status] || 'badge-warning'}">${statusLabels[o.status] || o.status}</span>
+                                    <span class="badge ${ORDER_STATUSES[o.status]?.color || 'badge-warning'}">${ORDER_STATUSES[o.status]?.label || o.status}</span>
                                 </div>
                                 <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${o.payment_method === 'balance' ? '💳 Оплачен с баланса' : '💵 Оплата при получении'}</div>
                                 ${canCancel ? `
@@ -2972,6 +3104,11 @@
                                 ${o.status === 'cancelled' ? `
                                         <div style="margin-top:8px;font-size:12px;color:var(--danger);">
                                             <i class="fas fa-ban"></i> Заказ отменён
+                                        </div>
+                                    ` : ''}
+                                ${o.status === 'completed' && o.payment_method === 'cash' ? `
+                                        <div style="margin-top:8px;font-size:12px;color:var(--success);">
+                                            <i class="fas fa-check-circle"></i> Оплачен и выдан
                                         </div>
                                     ` : ''}
                             </div>
@@ -3020,7 +3157,7 @@
 
             if (user.role === 'staff' || user.role === 'admin') {
                 const orders = await getOrders();
-                const readyOrders = orders.filter(o => o.status === 'ready');
+                const readyOrders = orders.filter(o => o.status === 'ready_for_pickup');
                 html += `
                         <div class="wallet-grid">
                             <div class="profile-card">
@@ -3047,7 +3184,7 @@
                                     <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
                                     <div>📍 ${o.pickup} · ${o.payment_method === 'balance' ? '💳 Оплачен с баланса' : '💵 Оплата при получении: ' + o.total_ar.toFixed(2) + ' АР'}</div>
                                     <div style="margin-top:8px;">
-                                        <button class="btn btn-success btn-sm" onclick="completeOrderByStaff('${o.id}', this)"><i class="fas fa-hand-holding"></i> Выдать заказ</button>
+                                        <button class="btn btn-success btn-sm" onclick="updateOrderStatus('${o.id}', 'completed', this)"><i class="fas fa-hand-holding"></i> Выдать заказ</button>
                                     </div>
                                 </div>
                             `;
@@ -3093,36 +3230,6 @@
         }
 
         // ============================================================
-        // ВЫДАЧА ЗАКАЗА СОТРУДНИКОМ ПВЗ
-        // ============================================================
-        window.completeOrderByStaff = async function(orderId, btnEl) {
-            const user = getCurrentUser();
-            if (!user || (user.role !== 'staff' && user.role !== 'admin')) {
-                showToast('Только сотрудник ПВЗ может выдавать заказы!', 'error');
-                return;
-            }
-            const btn = btnEl || (window.event && window.event.target && window.event.target.closest('button'));
-            const originalHtml = btn ? btn.innerHTML : null;
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Выдаём...';
-            }
-            try {
-                const result = await apiCall('updateOrderStatus', 'orders', { status: 'completed', actor: user.username },
-                    orderId);
-                if (!result || result.error) {
-                    throw new Error((result && result.error) || 'Не удалось выдать заказ');
-                }
-                showToast('📦 Заказ выдан покупателю!', 'success');
-                renderUI();
-            } catch (error) {
-                showToast('❌ ' + error.message, 'error');
-                if (btn) { btn.disabled = false;
-                    btn.innerHTML = originalHtml; }
-            }
-        };
-
-        // ============================================================
         // НАВИГАЦИЯ
         // ============================================================
         window.switchPage = function(page) {
@@ -3141,6 +3248,7 @@
             if (page === 'rules') renderRules();
             if (page === 'wallet') renderWallet();
             if (page === 'courier') renderCourier();
+            if (page === 'staff') renderStaff();
 
             window.scrollTo({ top: 0, behavior: 'smooth' });
         };
@@ -3201,7 +3309,7 @@
                 console.log('💎 1 АР = 3 алмаза');
                 console.log(
                     '📋 Горячие клавиши: Ctrl+1(каталог) Ctrl+2(корзина) Ctrl+3(профиль) Ctrl+4(избранное) Ctrl+5(правила)'
-                    );
+                );
             } catch (error) {
                 console.error('Ошибка запуска:', error);
                 const realReason = error?.message || 'неизвестная ошибка';
