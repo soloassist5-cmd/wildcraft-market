@@ -15,7 +15,6 @@ let schemaReady = false;
 async function ensureSchema() {
     if (schemaReady) return;
     
-    // Основные таблицы
     await pool.query(`CREATE TABLE IF NOT EXISTS users (
         username TEXT PRIMARY KEY,
         password TEXT NOT NULL,
@@ -130,7 +129,6 @@ async function ensureSchema() {
         created_at TIMESTAMP DEFAULT NOW()
     )`);
     
-    // Индексы для производительности
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_buyer ON orders(buyer)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_seller ON orders(seller)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`);
@@ -248,35 +246,7 @@ export default async function handler(req, res) {
             });
         }
 
-        // ===== АРХИВАЦИЯ СТАРЫХ ЗАКАЗОВ =====
-        if (action === 'archiveOrders') {
-            const client = await pool.connect();
-            try {
-                await client.query('BEGIN');
-                // Забираем заказы старше 24 часов
-                const oldOrders = await client.query(
-                    `SELECT * FROM orders WHERE status IN ('cancelled', 'completed') AND created_at < NOW() - INTERVAL '24 hours'`
-                );
-                for (const order of oldOrders.rows) {
-                    await client.query(
-                        `INSERT INTO orders_archive (
-                            id, buyer, seller, items, total_ar, total_diamonds, currency, pickup, status, payment_method, created_at, archived_at
-                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())`,
-                        [order.id, order.buyer, order.seller, order.items, order.total_ar, order.total_diamonds, order.currency, order.pickup, order.status, order.payment_method, order.created_at]
-                    );
-                    await client.query(`DELETE FROM orders WHERE id = $1`, [order.id]);
-                }
-                await client.query('COMMIT');
-                return res.status(200).json({ success: true, archived: oldOrders.rowCount });
-            } catch (err) {
-                await client.query('ROLLBACK');
-                throw err;
-            } finally {
-                client.release();
-            }
-        }
-
-        // ===== ПОЛНЫЙ ПРОФИЛЬ ПРОДАВЦА (ДЛЯ АДМИНА) =====
+        // ===== ПОЛНЫЙ ПРОФИЛЬ ПРОДАВЦА =====
         if (action === 'getSellerProfile') {
             const { username } = data || {};
             if (!username) return res.status(400).json({ error: 'Username required' });
@@ -314,7 +284,44 @@ export default async function handler(req, res) {
             });
         }
 
-        // ===== СМЕНА ПАРОЛЯ (ТОЛЬКО АДМИН) =====
+        // ===== ПОЛНЫЙ ПРОФИЛЬ КУРЬЕРА =====
+        if (action === 'getCourierProfile') {
+            const { username } = data || {};
+            if (!username) return res.status(400).json({ error: 'Username required' });
+
+            const [balanceRes, ordersRes, transactionsRes, userRes] = await Promise.all([
+                pool.query('SELECT * FROM balances WHERE username = $1', [username]),
+                pool.query('SELECT * FROM orders WHERE status = \'completed\' AND items->0->>\'delivered_by\' = $1 ORDER BY created_at DESC', [username]),
+                pool.query('SELECT * FROM transactions WHERE username = $1 ORDER BY created_at DESC LIMIT 100', [username]),
+                pool.query('SELECT * FROM users WHERE username = $1', [username])
+            ]);
+
+            // Считаем статистику доставок
+            const completedOrders = ordersRes.rows;
+            const totalDeliveries = completedOrders.length;
+            const totalEarned = completedOrders.reduce((sum, o) => {
+                // Комиссия за доставку — 1 АР за заказ
+                return sum + 1;
+            }, 0);
+
+            // Доход от комиссий (транзакции типа delivery_fee)
+            const deliveryFees = transactionsRes.rows.filter(t => t.type === 'delivery_fee');
+            const totalCommission = deliveryFees.reduce((sum, t) => sum + Number(t.amount), 0);
+
+            return res.status(200).json({
+                balance: balanceRes.rows[0]?.balance || 0,
+                orders: ordersRes.rows,
+                transactions: transactionsRes.rows,
+                user: userRes.rows[0] || null,
+                stats: {
+                    totalDeliveries: totalDeliveries,
+                    totalEarned: totalEarned,
+                    totalCommission: totalCommission
+                }
+            });
+        }
+
+        // ===== СМЕНА ПАРОЛЯ =====
         if (action === 'changePassword') {
             const { username, newPassword, actor } = data || {};
             if (!username || !newPassword || !actor) {
@@ -370,7 +377,7 @@ export default async function handler(req, res) {
             return res.status(200).json({ grouped, total: result.rows.length });
         }
 
-        // ===== ЗАВЕРШЕНИЕ ЗАКАЗА КУРЬЕРОМ (С КОМИССИЕЙ) =====
+        // ===== ЗАВЕРШЕНИЕ ЗАКАЗА КУРЬЕРОМ =====
         if (action === 'courierCompleteOrder') {
             const { orderId, courier, pickup } = data || {};
             if (!orderId || !courier || !pickup) {
@@ -387,6 +394,7 @@ export default async function handler(req, res) {
                 }
                 const order = orderRes.rows[0];
 
+                // Обновляем статус
                 await client.query(`UPDATE orders SET status = 'completed', updated_at = NOW() WHERE id = $1`, [orderId]);
 
                 // Начисляем комиссию курьеру (1 АР)
@@ -401,6 +409,33 @@ export default async function handler(req, res) {
 
                 await client.query('COMMIT');
                 return res.status(200).json({ success: true });
+            } catch (err) {
+                await client.query('ROLLBACK');
+                throw err;
+            } finally {
+                client.release();
+            }
+        }
+
+        // ===== АРХИВАЦИЯ СТАРЫХ ЗАКАЗОВ =====
+        if (action === 'archiveOrders') {
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+                const oldOrders = await client.query(
+                    `SELECT * FROM orders WHERE status IN ('cancelled', 'completed') AND created_at < NOW() - INTERVAL '24 hours'`
+                );
+                for (const order of oldOrders.rows) {
+                    await client.query(
+                        `INSERT INTO orders_archive (
+                            id, buyer, seller, items, total_ar, total_diamonds, currency, pickup, status, payment_method, created_at, archived_at
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())`,
+                        [order.id, order.buyer, order.seller, order.items, order.total_ar, order.total_diamonds, order.currency, order.pickup, order.status, order.payment_method, order.created_at]
+                    );
+                    await client.query(`DELETE FROM orders WHERE id = $1`, [order.id]);
+                }
+                await client.query('COMMIT');
+                return res.status(200).json({ success: true, archived: oldOrders.rowCount });
             } catch (err) {
                 await client.query('ROLLBACK');
                 throw err;
@@ -440,7 +475,7 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // ===== ПЕРЕВОД МЕЖДУ ПОЛЬЗОВАТЕЛЯМИ =====
+        // ===== ПЕРЕВОД =====
         if (action === 'transferBalance') {
             const { from, to, amount } = data || {};
             const amt = Number(amount);
@@ -477,7 +512,7 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // ===== ВЫВОД СРЕДСТВ =====
+        // ===== ВЫВОД =====
         if (action === 'withdrawBalance') {
             const { username, amount, pickup } = data || {};
             const amt = Number(amount);
@@ -507,7 +542,7 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // ===== БЛОКИРОВКА / РАЗБЛОКИРОВКА =====
+        // ===== БЛОКИРОВКА =====
         if (action === 'toggleBlockUser') {
             const { username, blocked } = data || {};
             if (!username) {
@@ -536,7 +571,7 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // ===== АДМИН: ОБНУЛЕНИЕ БАЛАНСА =====
+        // ===== ОБНУЛЕНИЕ БАЛАНСА =====
         if (action === 'adminResetBalance') {
             const { username, actor } = data || {};
             if (!username || !actor) {
@@ -922,24 +957,6 @@ export default async function handler(req, res) {
                     );
                 }
             }
-            if (table === 'orders') {
-                for (const order of data) {
-                    await pool.query(
-                        `INSERT INTO orders (id, buyer, seller, items, total_ar, total_diamonds, currency, pickup, status, created_at)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-                         ON CONFLICT (id) DO UPDATE SET
-                             buyer = EXCLUDED.buyer,
-                             seller = EXCLUDED.seller,
-                             items = EXCLUDED.items,
-                             total_ar = EXCLUDED.total_ar,
-                             total_diamonds = EXCLUDED.total_diamonds,
-                             currency = EXCLUDED.currency,
-                             pickup = EXCLUDED.pickup,
-                             status = EXCLUDED.status`,
-                        [order.id, order.buyer, order.seller, JSON.stringify(order.items), order.total_ar, order.total_diamonds, order.currency, order.pickup, order.status || 'pending']
-                    );
-                }
-            }
             if (table === 'pickup_points') {
                 await pool.query('DELETE FROM pickup_points');
                 for (const name of data) {
@@ -979,10 +996,7 @@ export default async function handler(req, res) {
                 const client = await pool.connect();
                 try {
                     await client.query('BEGIN');
-                    
-                    // Все зависимости удаляются каскадно благодаря ON DELETE CASCADE
                     await client.query('DELETE FROM users WHERE username = $1', [id]);
-                    
                     await client.query('COMMIT');
                 } catch (err) {
                     await client.query('ROLLBACK');
