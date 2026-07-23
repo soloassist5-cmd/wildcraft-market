@@ -37,17 +37,33 @@ async function ensureSchema() {
     // такую уже существующую таблицу не трогает, поэтому id мог
     // остаться без DEFAULT/sequence, и INSERT (который id не передаёт)
     // падал с "null value in column id violates not-null constraint".
-    // Ниже — идемпотентная миграция, безопасная при любом текущем
-    // состоянии таблицы (свежесозданной или существующей давно):
-    // 1) создаём/привязываем sequence к transactions.id, если её ещё нет;
-    // 2) выставляем DEFAULT nextval(...) на колонку id;
-    // 3) синхронизируем sequence с максимальным существующим id;
-    // 4) и только после этого, если id ещё nullable и NULL-строк нет,
-    //    делаем её NOT NULL.
+    //
+    // ВАЖНО: реальная колонка id в проде оказалась НЕ integer/serial,
+    // а TEXT/VARCHAR (отсюда и предыдущая ошибка "COALESCE types text
+    // and integer cannot be matched" — MAX(id) возвращал text, а его
+    // пытались сравнить с 0). Поэтому сначала смотрим реальный тип
+    // колонки в information_schema и только потом решаем, какой DEFAULT
+    // ей подходит — числовая последовательность или текстовый ID.
     // ------------------------------------------------------------
-    await pool.query(`CREATE SEQUENCE IF NOT EXISTS transactions_id_seq OWNED BY transactions.id`);
-    await pool.query(`ALTER TABLE transactions ALTER COLUMN id SET DEFAULT nextval('transactions_id_seq')`);
-    await pool.query(`SELECT setval('transactions_id_seq', COALESCE((SELECT MAX(id) FROM transactions), 0) + 1, false)`);
+    const idColRes = await pool.query(`
+        SELECT data_type FROM information_schema.columns
+        WHERE table_name = 'transactions' AND column_name = 'id'
+    `);
+    const idDataType = idColRes.rows[0]?.data_type; // 'integer' | 'bigint' | 'smallint' | 'text' | 'character varying' | ...
+    const isNumericId = ['integer', 'bigint', 'smallint'].includes(idDataType);
+
+    await pool.query(`CREATE SEQUENCE IF NOT EXISTS transactions_id_seq`);
+    await pool.query(`ALTER SEQUENCE transactions_id_seq OWNED BY transactions.id`);
+
+    if (isNumericId) {
+        await pool.query(`ALTER TABLE transactions ALTER COLUMN id SET DEFAULT nextval('transactions_id_seq')`);
+        await pool.query(`SELECT setval('transactions_id_seq', COALESCE((SELECT MAX(id) FROM transactions), 0) + 1, false)`);
+    } else {
+        // id текстовый — генерируем текстовый ID на основе той же
+        // sequence, чтобы не требовать приведения типов при сравнении.
+        await pool.query(`ALTER TABLE transactions ALTER COLUMN id SET DEFAULT ('TXN-' || nextval('transactions_id_seq')::text)`);
+    }
+
     await pool.query(`
         DO $$
         BEGIN
