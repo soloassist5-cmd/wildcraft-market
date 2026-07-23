@@ -375,10 +375,10 @@ export default async function handler(req, res) {
             return res.status(200).json({ grouped, total: result.rows.length });
         }
 
-        // ===== ОБНОВЛЕНИЕ СТАТУСА ЗАКАЗА =====
+        // ===== ОБНОВЛЕНИЕ СТАТУСА ЗАКАЗА (ИСПРАВЛЕНО) =====
         if (action === 'updateOrderStatus') {
             const orderId = id;
-            const { actor, status, role } = data || {};
+            const { actor, status } = data || {};
             const allowedStatuses = ['pending', 'processing', 'ready_for_courier', 'in_transit', 'ready_for_pickup', 'completed', 'cancelled'];
 
             if (!orderId || !status) {
@@ -391,6 +391,8 @@ export default async function handler(req, res) {
             const client = await pool.connect();
             try {
                 await client.query('BEGIN');
+                
+                // Проверяем существование заказа
                 const orderRes = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [orderId]);
                 if (orderRes.rows.length === 0) {
                     await client.query('ROLLBACK');
@@ -398,10 +400,17 @@ export default async function handler(req, res) {
                 }
                 const order = orderRes.rows[0];
 
-                // Проверка прав по ролям
+                // Проверяем роль актора
+                const actorRes = await client.query('SELECT role FROM users WHERE username = $1', [actor]);
+                if (actorRes.rows.length === 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(404).json({ error: 'Пользователь не найден' });
+                }
+                const actorRole = actorRes.rows[0].role;
+
+                // ===== ЛОГИКА ПЕРЕХОДОВ ПО СТАТУСАМ =====
                 switch (status) {
                     case 'processing':
-                        // Только продавец
                         if (order.seller !== actor) {
                             await client.query('ROLLBACK');
                             return res.status(403).json({ error: 'Только продавец может взять заказ в работу' });
@@ -413,7 +422,6 @@ export default async function handler(req, res) {
                         break;
 
                     case 'ready_for_courier':
-                        // Только продавец
                         if (order.seller !== actor) {
                             await client.query('ROLLBACK');
                             return res.status(403).json({ error: 'Только продавец может передать заказ курьеру' });
@@ -425,9 +433,7 @@ export default async function handler(req, res) {
                         break;
 
                     case 'in_transit':
-                        // Только курьер
-                        const courierCheck = await client.query('SELECT role FROM users WHERE username = $1', [actor]);
-                        if (courierCheck.rows[0]?.role !== 'courier') {
+                        if (actorRole !== 'courier') {
                             await client.query('ROLLBACK');
                             return res.status(403).json({ error: 'Только курьер может взять заказ в доставку' });
                         }
@@ -435,14 +441,15 @@ export default async function handler(req, res) {
                             await client.query('ROLLBACK');
                             return res.status(400).json({ error: 'Заказ должен быть готов к передаче курьеру' });
                         }
-                        // Назначаем курьера
-                        await client.query('UPDATE orders SET courier = $1 WHERE id = $2', [actor, orderId]);
+                        // Назначаем курьера — ОТДЕЛЬНЫЙ UPDATE
+                        await client.query(
+                            'UPDATE orders SET courier = $1 WHERE id = $2',
+                            [actor, orderId]
+                        );
                         break;
 
                     case 'ready_for_pickup':
-                        // Только курьер
-                        const courierCheck2 = await client.query('SELECT role FROM users WHERE username = $1', [actor]);
-                        if (courierCheck2.rows[0]?.role !== 'courier') {
+                        if (actorRole !== 'courier') {
                             await client.query('ROLLBACK');
                             return res.status(403).json({ error: 'Только курьер может отметить заказ как доставленный в ПВЗ' });
                         }
@@ -460,9 +467,7 @@ export default async function handler(req, res) {
                         break;
 
                     case 'completed':
-                        // Только сотрудник ПВЗ или админ
-                        const staffCheck = await client.query('SELECT role FROM users WHERE username = $1', [actor]);
-                        if (staffCheck.rows[0]?.role !== 'staff' && staffCheck.rows[0]?.role !== 'admin') {
+                        if (actorRole !== 'staff' && actorRole !== 'admin') {
                             await client.query('ROLLBACK');
                             return res.status(403).json({ error: 'Только сотрудник ПВЗ может выдать заказ' });
                         }
@@ -470,7 +475,6 @@ export default async function handler(req, res) {
                             await client.query('ROLLBACK');
                             return res.status(400).json({ error: 'Заказ должен быть готов к выдаче' });
                         }
-                        // Если оплата при получении (cash) — списываем деньги с покупателя
                         if (order.payment_method === 'cash') {
                             const buyerBalance = await client.query('SELECT balance FROM balances WHERE username = $1 FOR UPDATE', [order.buyer]);
                             const currentBalance = Number(buyerBalance.rows[0]?.balance || 0);
@@ -483,7 +487,6 @@ export default async function handler(req, res) {
                             await adjustBalance(client, order.seller, Number(order.total_ar));
                             await logTransaction(client, order.seller, 'sale', Number(order.total_ar), `Продажа заказа #${orderId} (оплата при получении)`);
                         } else {
-                            // balance — уже списано при оформлении, начисляем продавцу
                             await adjustBalance(client, order.seller, Number(order.total_ar));
                             await logTransaction(client, order.seller, 'sale', Number(order.total_ar), `Выплата за заказ #${orderId}`);
                         }
@@ -491,19 +494,23 @@ export default async function handler(req, res) {
                         break;
 
                     case 'cancelled':
-                        // Только покупатель (в течение 15 минут) или админ
-                        if (actor !== order.buyer) {
-                            const adminCheck = await client.query('SELECT role FROM users WHERE username = $1', [actor]);
-                            if (adminCheck.rows[0]?.role !== 'admin') {
-                                await client.query('ROLLBACK');
-                                return res.status(403).json({ error: 'Только покупатель или администратор может отменить заказ' });
-                            }
+                        if (actor !== order.buyer && actorRole !== 'admin') {
+                            await client.query('ROLLBACK');
+                            return res.status(403).json({ error: 'Только покупатель или администратор может отменить заказ' });
                         }
                         if (order.status === 'completed') {
                             await client.query('ROLLBACK');
                             return res.status(400).json({ error: 'Выданный заказ нельзя отменить' });
                         }
-                        // Возвращаем товары на склад
+                        if (actor === order.buyer && actorRole !== 'admin') {
+                            const createdAt = new Date(order.created_at);
+                            const now = new Date();
+                            const diffMinutes = (now - createdAt) / (1000 * 60);
+                            if (diffMinutes > 15) {
+                                await client.query('ROLLBACK');
+                                return res.status(400).json({ error: 'Отмена доступна только в течение 15 минут после оформления' });
+                            }
+                        }
                         const items = order.items;
                         for (const item of items) {
                             await client.query(
@@ -511,7 +518,6 @@ export default async function handler(req, res) {
                                 [item.quantity, item.productId]
                             );
                         }
-                        // Возвращаем деньги если оплачено с баланса
                         if (order.payment_method === 'balance') {
                             await adjustBalance(client, order.buyer, Number(order.total_ar));
                             await logTransaction(client, order.buyer, 'refund', Number(order.total_ar), `Возврат за отменённый заказ #${orderId}`);
@@ -519,6 +525,7 @@ export default async function handler(req, res) {
                         break;
                 }
 
+                // ОБНОВЛЯЕМ СТАТУС (отдельный UPDATE)
                 await client.query(
                     `UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2`,
                     [status, orderId]
@@ -528,7 +535,8 @@ export default async function handler(req, res) {
                 return res.status(200).json({ success: true });
             } catch (err) {
                 await client.query('ROLLBACK');
-                throw err;
+                console.error('❌ Ошибка обновления статуса:', err);
+                return res.status(500).json({ error: err.message });
             } finally {
                 client.release();
             }
@@ -949,4 +957,4 @@ export default async function handler(req, res) {
             detail: error.detail,
         });
     }
-}
+                    }
