@@ -8,11 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
             --bg-primary: #080c14;
             --bg-secondary: #0e1626;
@@ -31,1137 +27,222 @@
             --radius-sm: 10px;
             --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
             --transition: cubic-bezier(0.4, 0, 0.2, 1);
-            /* Реальная высота шапки меряется в JS (syncHeaderHeight) —
-               так контент никогда не прячется под header, даже если он
-               переносится на 2-3 строки на маленьких экранах. */
             --header-height: 74px;
         }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            min-height: 100vh;
-            line-height: 1.6;
-        }
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: var(--bg-primary);
-        }
-        ::-webkit-scrollbar-thumb {
-            background: var(--accent);
-            border-radius: 3px;
-        }
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 0 20px;
-        }
-        .flex-between {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-        .text-gradient {
-            background: linear-gradient(135deg, var(--accent), var(--secondary));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .badge {
-            display: inline-block;
-            padding: 2px 12px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-        .badge-success {
-            background: rgba(34, 197, 94, 0.15);
-            color: var(--success);
-        }
-        .badge-warning {
-            background: rgba(245, 158, 11, 0.15);
-            color: var(--warning);
-            animation: badgePulse 2.2s ease-in-out infinite;
-        }
-        @keyframes badgePulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.35); }
-            50% { box-shadow: 0 0 0 5px rgba(245, 158, 11, 0); }
-        }
-        .badge-danger {
-            background: rgba(239, 68, 68, 0.15);
-            color: var(--danger);
-        }
-        .badge-info {
-            background: rgba(6, 182, 212, 0.15);
-            color: var(--secondary);
-        }
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--text-secondary);
-        }
-        .empty-state i {
-            font-size: 56px;
-            color: var(--text-muted);
-            margin-bottom: 16px;
-            display: block;
-        }
-        .empty-state h3 {
-            font-size: 18px;
-            color: var(--text-primary);
-            margin-bottom: 8px;
-        }
-        .empty-state p {
-            font-size: 14px;
-            max-width: 400px;
-            margin: 0 auto 20px;
-        }
-        .header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 1000;
-            background: rgba(8, 12, 20, 0.92);
-            backdrop-filter: blur(24px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-            padding: 10px 0;
-            transition: box-shadow 0.3s var(--transition);
-        }
-        .header.scrolled {
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
-        }
-        .header-inner {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-            flex-wrap: wrap;
-        }
-        .logo {
-            font-size: 22px;
-            font-weight: 900;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            cursor: pointer;
-        }
-        .logo-icon {
-            font-size: 26px;
-        }
-        .nav-links {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            flex-wrap: wrap;
-        }
-        .nav-links button {
-            background: transparent;
-            border: none;
-            color: var(--text-secondary);
-            padding: 8px 16px;
-            border-radius: var(--radius-sm);
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s var(--transition);
-            font-family: inherit;
-            position: relative;
-            white-space: nowrap;
-        }
-        .nav-links button:hover {
-            color: var(--text-primary);
-            background: rgba(255, 255, 255, 0.05);
-        }
-        .nav-links button.active {
-            color: #fff;
-            background: rgba(124, 58, 237, 0.15);
-        }
-        .nav-links button.active::after {
-            content: '';
-            position: absolute;
-            bottom: 2px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 20px;
-            height: 2px;
-            background: var(--accent);
-            border-radius: 2px;
-        }
-        .nav-right {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .cart-btn {
-            position: relative;
-            background: transparent !important;
-            border: none !important;
-            color: var(--text-secondary) !important;
-            font-size: 18px;
-            cursor: pointer;
-            padding: 6px 10px !important;
-            border-radius: var(--radius-sm);
-            transition: all 0.2s var(--transition);
-        }
-        .cart-btn:hover {
-            color: var(--text-primary);
-            background: rgba(255, 255, 255, 0.05) !important;
-        }
-        .cart-badge {
-            position: absolute;
-            top: -4px;
-            right: -4px;
-            background: var(--accent);
-            color: #fff;
-            font-size: 10px;
-            font-weight: 700;
-            min-width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0 4px;
-        }
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-        .user-info .username {
-            color: var(--text-primary);
-            font-weight: 600;
-        }
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-            padding: 8px 20px;
-            border: none;
-            border-radius: var(--radius-sm);
-            font-weight: 600;
-            font-size: 13px;
-            cursor: pointer;
-            transition: all 0.25s var(--transition);
-            font-family: inherit;
-            text-decoration: none;
-            white-space: nowrap;
-        }
-        .btn:active:not(:disabled) {
-            transform: scale(0.96);
-        }
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none !important;
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, var(--accent), var(--secondary));
-            color: #fff;
-        }
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 30px var(--accent-glow);
-        }
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.06);
-            color: var(--text-primary);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-        }
-        .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-        .btn-danger {
-            background: rgba(239, 68, 68, 0.15);
-            color: var(--danger);
-            border: 1px solid rgba(239, 68, 68, 0.15);
-        }
-        .btn-danger:hover {
-            background: rgba(239, 68, 68, 0.25);
-        }
-        .btn-success {
-            background: rgba(34, 197, 94, 0.15);
-            color: var(--success);
-            border: 1px solid rgba(34, 197, 94, 0.15);
-        }
-        .btn-success:hover {
-            background: rgba(34, 197, 94, 0.25);
-        }
-        .btn-sm {
-            padding: 5px 12px;
-            font-size: 12px;
-        }
-        .btn-block {
-            width: 100%;
-            justify-content: center;
-        }
-        .main {
-            margin-top: var(--header-height);
-            padding: 24px 0 60px;
-            min-height: calc(100vh - var(--header-height));
-            transition: margin-top 0.15s var(--transition);
-        }
-        .page {
-            display: none;
-            animation: fadeSlideIn 0.4s var(--transition);
-        }
-        .page.active {
-            display: block;
-        }
-        @keyframes fadeSlideIn {
-            from {
-                opacity: 0;
-                transform: translateY(16px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        .page-header {
-            margin-bottom: 24px;
-        }
-        .page-header h1 {
-            font-size: 28px;
-            font-weight: 800;
-            letter-spacing: -0.5px;
-            margin-bottom: 4px;
-        }
-        .page-header p {
-            color: var(--text-secondary);
-            font-size: 14px;
-        }
-        .products-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-            gap: 20px;
-        }
-        .product-card {
-            background: var(--bg-card);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            border-radius: var(--radius);
-            padding: 20px;
-            transition: all 0.3s var(--transition);
-            position: relative;
-            overflow: hidden;
-        }
-        .product-card:hover {
-            transform: translateY(-6px);
-            border-color: rgba(124, 58, 237, 0.15);
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-        }
-        .product-card .icon {
-            font-size: 40px;
-            display: block;
-            text-align: center;
-            margin-bottom: 10px;
-            transition: transform 0.35s var(--transition);
-        }
-        .product-card:hover .icon {
-            transform: scale(1.15) rotate(-4deg);
-        }
-        .product-card .name {
-            font-size: 16px;
-            font-weight: 700;
-            margin-bottom: 2px;
-        }
-        .product-card .shop-name {
-            font-size: 12px;
-            color: var(--accent);
-            font-weight: 600;
-            margin-bottom: 6px;
-        }
-        .product-card .category-tag {
-            font-size: 11px;
-            color: var(--text-secondary);
-            background: rgba(255, 255, 255, 0.05);
-            padding: 2px 10px;
-            border-radius: 12px;
-            display: inline-block;
-            margin-bottom: 6px;
-        }
-        .product-card .price {
-            font-size: 20px;
-            font-weight: 800;
-            color: var(--secondary);
-            margin-bottom: 2px;
-        }
-        .product-card .price-alt {
-            font-size: 13px;
-            color: var(--text-secondary);
-            margin-bottom: 8px;
-        }
-        .product-card .stock {
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-bottom: 12px;
-        }
-        .product-card .stock .in-stock {
-            color: var(--success);
-        }
-        .product-card .stock .low-stock {
-            color: var(--warning);
-        }
-        .product-card .stock .out-of-stock {
-            color: var(--danger);
-        }
-        .product-card .actions {
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-        }
-        .product-card .actions .btn {
-            flex: 1;
-            min-width: 60px;
-            font-size: 12px;
-            padding: 6px 12px;
-        }
-        .product-card .wishlist-btn {
-            position: absolute;
-            top: 12px;
-            right: 12px;
-            background: rgba(255, 255, 255, 0.05);
-            border: none;
-            color: var(--text-secondary);
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            cursor: pointer;
-            transition: all 0.2s var(--transition);
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .product-card .wishlist-btn:hover {
-            background: rgba(239, 68, 68, 0.15);
-            color: var(--danger);
-        }
-        .product-card .wishlist-btn.liked {
-            color: var(--danger);
-        }
-        .product-card .admin-delete-btn {
-            position: absolute;
-            top: 12px;
-            left: 12px;
-            background: rgba(239, 68, 68, 0.15);
-            border: none;
-            color: var(--danger);
-            width: 32px;
-            height: 32px;
-            border-radius: 50%;
-            cursor: pointer;
-            transition: all 0.2s var(--transition);
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .product-card .admin-delete-btn:hover {
-            background: rgba(239, 68, 68, 0.3);
-            transform: scale(1.1);
-        }
-        .filter-tabs {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-bottom: 20px;
-        }
-        .filter-tabs button {
-            padding: 6px 16px;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 20px;
-            background: transparent;
-            color: var(--text-secondary);
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s var(--transition);
-            font-family: inherit;
-        }
-        .filter-tabs button:hover {
-            border-color: rgba(124, 58, 237, 0.3);
-            color: var(--text-primary);
-        }
-        .filter-tabs button.active-filter {
-            background: rgba(124, 58, 237, 0.15);
-            border-color: var(--accent);
-            color: #fff;
-        }
-        .catalog-controls {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            margin-bottom: 20px;
-            align-items: center;
-        }
-        .catalog-controls .search-wrap {
-            flex: 1;
-            min-width: 200px;
-            position: relative;
-        }
-        .catalog-controls .search-wrap input {
-            width: 100%;
-            padding: 10px 16px 10px 40px;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: var(--radius-sm);
-            color: var(--text-primary);
-            font-size: 14px;
-            font-family: inherit;
-            transition: all 0.2s var(--transition);
-        }
-        .catalog-controls .search-wrap input:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--accent-glow);
-        }
-        .catalog-controls .search-wrap i {
-            position: absolute;
-            left: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-muted);
-        }
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            z-index: 2000;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(12px);
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        .modal-overlay.open {
-            display: flex;
-        }
-        .modal {
-            background: var(--bg-secondary);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: var(--radius);
-            padding: 32px;
-            max-width: 520px;
-            width: 100%;
-            max-height: 90vh;
-            overflow-y: auto;
-            animation: slideUp 0.3s var(--transition);
-        }
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: scale(0.96) translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1) translateY(0);
-            }
-        }
-        .modal .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        .modal .modal-header h2 {
-            font-size: 22px;
-            font-weight: 800;
-        }
-        .modal .modal-header .close {
-            background: none;
-            border: none;
-            color: var(--text-secondary);
-            font-size: 24px;
-            cursor: pointer;
-            transition: all 0.2s var(--transition);
-            padding: 4px;
-        }
-        .modal .modal-header .close:hover {
-            color: var(--text-primary);
-            transform: rotate(90deg);
-        }
-        .form-group {
-            margin-bottom: 16px;
-        }
-        .form-group label {
-            display: block;
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            margin-bottom: 4px;
-        }
-        .form-group input,
-        .form-group select,
-        .form-group textarea {
-            width: 100%;
-            padding: 10px 14px;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: var(--radius-sm);
-            color: var(--text-primary);
-            font-size: 14px;
-            font-family: inherit;
-            transition: all 0.2s var(--transition);
-        }
-        .form-group input:focus,
-        .form-group select:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--accent-glow);
-        }
-        .form-group textarea {
-            resize: vertical;
-            min-height: 60px;
-        }
-        .form-group select option {
-            background: var(--bg-secondary);
-        }
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-        .toast-container {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            z-index: 3000;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            max-width: 380px;
-            width: 100%;
-        }
-        .toast {
-            padding: 14px 20px;
-            border-radius: var(--radius-sm);
-            background: var(--bg-secondary);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            box-shadow: var(--shadow);
-            animation: slideInToast 0.4s var(--transition);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 14px;
-        }
-        .toast.success {
-            border-left: 4px solid var(--success);
-        }
-        .toast.error {
-            border-left: 4px solid var(--danger);
-        }
-        .toast.warning {
-            border-left: 4px solid var(--warning);
-        }
-        .toast.info {
-            border-left: 4px solid var(--secondary);
-        }
-        .toast .icon {
-            font-size: 20px;
-        }
-        .toast .close-toast {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            font-size: 16px;
-            margin-left: auto;
-            padding: 0 4px;
-        }
-        @keyframes slideInToast {
-            from {
-                opacity: 0;
-                transform: translateX(40px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-        .profile-grid {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 20px;
-        }
-        .profile-card {
-            background: var(--bg-card);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            border-radius: var(--radius);
-            padding: 24px;
-        }
-        .profile-card .card-title {
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .order-item {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            border-radius: var(--radius-sm);
-            padding: 14px 16px;
-            margin-bottom: 10px;
-        }
-        .order-item .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-bottom: 6px;
-        }
-        .order-item .id {
-            font-weight: 600;
-            font-size: 14px;
-        }
-        .order-item .date {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-        .order-item .buyer {
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-        .order-item .items {
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-        .order-item .total {
-            font-weight: 700;
-            color: var(--secondary);
-            font-size: 16px;
-        }
-        .order-item .pickup {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-        .order-item .status-actions {
-            display: flex;
-            gap: 6px;
-            margin-top: 6px;
-            flex-wrap: wrap;
-        }
-        .rules-list {
-            display: grid;
-            gap: 12px;
-        }
-        .rule-item {
-            background: var(--bg-card);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            border-radius: var(--radius-sm);
-            padding: 16px 20px;
-            display: flex;
-            gap: 16px;
-            align-items: flex-start;
-        }
-        .rule-item .num {
-            font-size: 20px;
-            font-weight: 800;
-            color: var(--accent);
-            min-width: 32px;
-        }
-        .rule-item .content h4 {
-            font-size: 15px;
-            font-weight: 700;
-            margin-bottom: 4px;
-        }
-        .rule-item .content p {
-            font-size: 14px;
-            color: var(--text-secondary);
-        }
-        .admin-panel .pickup-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin: 12px 0;
-        }
-        .admin-panel .pickup-list .tag {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 4px 14px;
-            border-radius: 20px;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .admin-panel .pickup-list .tag .del {
-            background: none;
-            border: none;
-            color: var(--danger);
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .my-products-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: 12px;
-            margin-top: 12px;
-        }
-        .my-product-item {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            border-radius: var(--radius-sm);
-            padding: 14px;
-            text-align: center;
-        }
-        .my-product-item .icon {
-            font-size: 32px;
-        }
-        .my-product-item .name {
-            font-weight: 600;
-            font-size: 14px;
-        }
-        .my-product-item .price {
-            color: var(--secondary);
-            font-weight: 700;
-            font-size: 13px;
-        }
-        .my-product-item .stock {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-        .my-product-item .status-badge {
-            font-size: 10px;
-            padding: 2px 10px;
-            border-radius: 12px;
-            display: inline-block;
-            margin-top: 4px;
-        }
-        .cart-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .cart-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 14px 16px;
-            background: var(--bg-card);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            border-radius: var(--radius-sm);
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-        .cart-item .info {
-            flex: 1;
-            min-width: 150px;
-        }
-        .cart-item .info .name {
-            font-weight: 600;
-            font-size: 14px;
-        }
-        .cart-item .info .shop {
-            font-size: 12px;
-            color: var(--accent);
-        }
-        .cart-item .info .price {
-            font-size: 14px;
-            font-weight: 700;
-            color: var(--secondary);
-            margin-top: 2px;
-        }
-        .cart-item .controls {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .cart-item .controls button {
-            width: 30px;
-            height: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: var(--radius-sm);
-            background: rgba(255, 255, 255, 0.04);
-            color: var(--text-primary);
-            font-size: 16px;
-            cursor: pointer;
-            transition: all 0.2s var(--transition);
-            font-family: inherit;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .cart-item .controls button:hover {
-            background: rgba(124, 58, 237, 0.15);
-            border-color: var(--accent);
-        }
-        .cart-item .controls button:disabled {
-            opacity: 0.3;
-            cursor: not-allowed;
-        }
-        .cart-item .controls .qty {
-            font-weight: 700;
-            min-width: 24px;
-            text-align: center;
-            font-size: 14px;
-        }
-        .cart-item .controls .remove {
-            color: var(--danger);
-            border-color: rgba(239, 68, 68, 0.15);
-        }
-        .cart-item .controls .remove:hover {
-            background: rgba(239, 68, 68, 0.15);
-        }
-        .cart-summary {
-            margin-top: 20px;
-            padding: 20px;
-            background: var(--bg-card);
-            border: 1px solid rgba(255, 255, 255, 0.04);
-            border-radius: var(--radius);
-        }
-        .cart-summary .total {
-            font-size: 22px;
-            font-weight: 800;
-            color: var(--secondary);
-        }
-        .cart-summary .total-alt {
-            font-size: 14px;
-            color: var(--text-secondary);
-        }
-        .cart-summary .actions {
-            display: flex;
-            gap: 12px;
-            margin-top: 16px;
-            flex-wrap: wrap;
-        }
-        @media (max-width: 768px) {
-            .header-inner {
-                flex-direction: column;
-                align-items: stretch;
-                gap: 8px;
-            }
-            .nav-links {
-                justify-content: center;
-            }
-            .nav-right {
-                justify-content: center;
-            }
-            .main {
-                padding: 16px;
-            }
-            .products-grid {
-                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-                gap: 12px;
-            }
-            .product-card {
-                padding: 14px;
-            }
-            .modal {
-                padding: 20px;
-            }
-            .form-row {
-                grid-template-columns: 1fr;
-            }
-            .cart-item {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            .cart-item .controls {
-                justify-content: flex-end;
-            }
-            .page-header h1 {
-                font-size: 22px;
-            }
-            .catalog-controls {
-                flex-direction: column;
-            }
-            .catalog-controls .search-wrap {
-                width: 100%;
-            }
-            .rule-item {
-                flex-direction: column;
-                gap: 8px;
-            }
-        }
-        @media (max-width: 480px) {
-            .products-grid {
-                grid-template-columns: 1fr 1fr;
-                gap: 10px;
-            }
-            .product-card {
-                padding: 12px;
-            }
-            .product-card .icon {
-                font-size: 26px;
-            }
-            .product-card .name {
-                font-size: 13px;
-            }
-            .product-card .price {
-                font-size: 15px;
-            }
-            .product-card .actions .btn {
-                font-size: 11px;
-                padding: 4px 8px;
-            }
-            .nav-links button {
-                font-size: 12px;
-                padding: 6px 12px;
-            }
-            .btn {
-                font-size: 12px;
-                padding: 6px 14px;
-            }
-            .modal {
-                padding: 16px;
-            }
-        }
-
-        /* ============================================================
-           БАЛАНС / КОШЕЛЁК / ПВЗ (НОВОЕ)
-           ============================================================ */
-        .balance-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 14px;
-            border-radius: 20px;
-            background: linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(6, 182, 212, 0.18));
-            border: 1px solid rgba(124, 58, 237, 0.3);
-            font-size: 13px;
-            font-weight: 700;
-            color: var(--text-primary);
-            white-space: nowrap;
-            cursor: pointer;
-            transition: all 0.2s var(--transition);
-        }
-        .balance-badge:hover {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px var(--accent-glow);
-        }
-        .balance-badge i {
-            color: var(--warning);
-        }
-        .wallet-hero {
-            background: linear-gradient(135deg, rgba(124, 58, 237, 0.12), rgba(6, 182, 212, 0.08));
-            border: 1px solid rgba(124, 58, 237, 0.25);
-            border-radius: var(--radius);
-            padding: 28px;
-            text-align: center;
-            margin-bottom: 20px;
-        }
-        .wallet-hero .amount {
-            font-size: 40px;
-            font-weight: 900;
-            margin: 8px 0;
-        }
-        .wallet-hero .label {
-            color: var(--text-secondary);
-            font-size: 13px;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-        }
-        .wallet-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 16px;
-            margin-bottom: 20px;
-        }
-        details.tx-log {
-            background: var(--bg-card);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: var(--radius-sm);
-            padding: 14px 16px;
-            margin-top: 12px;
-        }
-        details.tx-log summary {
-            cursor: pointer;
-            font-weight: 700;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            list-style: none;
-        }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; line-height: 1.6; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-primary); }
+        ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 3px; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 0 20px; }
+        .flex-between { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+        .text-gradient { background: linear-gradient(135deg, var(--accent), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .badge { display: inline-block; padding: 2px 12px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+        .badge-success { background: rgba(34, 197, 94, 0.15); color: var(--success); }
+        .badge-warning { background: rgba(245, 158, 11, 0.15); color: var(--warning); animation: badgePulse 2.2s ease-in-out infinite; }
+        @keyframes badgePulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.35); } 50% { box-shadow: 0 0 0 5px rgba(245, 158, 11, 0); } }
+        .badge-danger { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+        .badge-info { background: rgba(6, 182, 212, 0.15); color: var(--secondary); }
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-secondary); }
+        .empty-state i { font-size: 56px; color: var(--text-muted); margin-bottom: 16px; display: block; }
+        .empty-state h3 { font-size: 18px; color: var(--text-primary); margin-bottom: 8px; }
+        .empty-state p { font-size: 14px; max-width: 400px; margin: 0 auto 20px; }
+        .header { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(8, 12, 20, 0.92); backdrop-filter: blur(24px); border-bottom: 1px solid rgba(255, 255, 255, 0.04); padding: 10px 0; transition: box-shadow 0.3s var(--transition); }
+        .header.scrolled { box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5); }
+        .header-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+        .logo { font-size: 22px; font-weight: 900; text-decoration: none; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        .logo-icon { font-size: 26px; }
+        .nav-links { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+        .nav-links button { background: transparent; border: none; color: var(--text-secondary); padding: 8px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s var(--transition); font-family: inherit; position: relative; white-space: nowrap; }
+        .nav-links button:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.05); }
+        .nav-links button.active { color: #fff; background: rgba(124, 58, 237, 0.15); }
+        .nav-links button.active::after { content: ''; position: absolute; bottom: 2px; left: 50%; transform: translateX(-50%); width: 20px; height: 2px; background: var(--accent); border-radius: 2px; }
+        .nav-right { display: flex; align-items: center; gap: 12px; }
+        .cart-btn { position: relative; background: transparent !important; border: none !important; color: var(--text-secondary) !important; font-size: 18px; cursor: pointer; padding: 6px 10px !important; border-radius: var(--radius-sm); transition: all 0.2s var(--transition); }
+        .cart-btn:hover { color: var(--text-primary); background: rgba(255, 255, 255, 0.05) !important; }
+        .cart-badge { position: absolute; top: -4px; right: -4px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 700; min-width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
+        .user-info { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary); }
+        .user-info .username { color: var(--text-primary); font-weight: 600; }
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 20px; border: none; border-radius: var(--radius-sm); font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.25s var(--transition); font-family: inherit; text-decoration: none; white-space: nowrap; }
+        .btn:active:not(:disabled) { transform: scale(0.96); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
+        .btn-primary { background: linear-gradient(135deg, var(--accent), var(--secondary)); color: #fff; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px var(--accent-glow); }
+        .btn-secondary { background: rgba(255, 255, 255, 0.06); color: var(--text-primary); border: 1px solid rgba(255, 255, 255, 0.06); }
+        .btn-secondary:hover { background: rgba(255, 255, 255, 0.1); }
+        .btn-danger { background: rgba(239, 68, 68, 0.15); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.15); }
+        .btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
+        .btn-success { background: rgba(34, 197, 94, 0.15); color: var(--success); border: 1px solid rgba(34, 197, 94, 0.15); }
+        .btn-success:hover { background: rgba(34, 197, 94, 0.25); }
+        .btn-sm { padding: 5px 12px; font-size: 12px; }
+        .btn-block { width: 100%; justify-content: center; }
+        .main { margin-top: var(--header-height); padding: 24px 0 60px; min-height: calc(100vh - var(--header-height)); transition: margin-top 0.15s var(--transition); }
+        .page { display: none; animation: fadeSlideIn 0.4s var(--transition); }
+        .page.active { display: block; }
+        @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+        .page-header { margin-bottom: 24px; }
+        .page-header h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 4px; }
+        .page-header p { color: var(--text-secondary); font-size: 14px; }
+        .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 20px; }
+        .product-card { background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: var(--radius); padding: 20px; transition: all 0.3s var(--transition); position: relative; overflow: hidden; }
+        .product-card:hover { transform: translateY(-6px); border-color: rgba(124, 58, 237, 0.15); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4); }
+        .product-card .icon { font-size: 40px; display: block; text-align: center; margin-bottom: 10px; transition: transform 0.35s var(--transition); }
+        .product-card:hover .icon { transform: scale(1.15) rotate(-4deg); }
+        .product-card .name { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+        .product-card .shop-name { font-size: 12px; color: var(--accent); font-weight: 600; margin-bottom: 6px; }
+        .product-card .category-tag { font-size: 11px; color: var(--text-secondary); background: rgba(255, 255, 255, 0.05); padding: 2px 10px; border-radius: 12px; display: inline-block; margin-bottom: 6px; }
+        .product-card .price { font-size: 20px; font-weight: 800; color: var(--secondary); margin-bottom: 2px; }
+        .product-card .price-alt { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
+        .product-card .stock { font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; }
+        .product-card .stock .in-stock { color: var(--success); }
+        .product-card .stock .low-stock { color: var(--warning); }
+        .product-card .stock .out-of-stock { color: var(--danger); }
+        .product-card .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+        .product-card .actions .btn { flex: 1; min-width: 60px; font-size: 12px; padding: 6px 12px; }
+        .product-card .wishlist-btn { position: absolute; top: 12px; right: 12px; background: rgba(255, 255, 255, 0.05); border: none; color: var(--text-secondary); width: 32px; height: 32px; border-radius: 50%; cursor: pointer; transition: all 0.2s var(--transition); font-size: 14px; display: flex; align-items: center; justify-content: center; }
+        .product-card .wishlist-btn:hover { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+        .product-card .wishlist-btn.liked { color: var(--danger); }
+        .product-card .admin-delete-btn { position: absolute; top: 12px; left: 12px; background: rgba(239, 68, 68, 0.15); border: none; color: var(--danger); width: 32px; height: 32px; border-radius: 50%; cursor: pointer; transition: all 0.2s var(--transition); font-size: 14px; display: flex; align-items: center; justify-content: center; }
+        .product-card .admin-delete-btn:hover { background: rgba(239, 68, 68, 0.3); transform: scale(1.1); }
+        .filter-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 20px; }
+        .filter-tabs button { padding: 6px 16px; border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 20px; background: transparent; color: var(--text-secondary); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s var(--transition); font-family: inherit; }
+        .filter-tabs button:hover { border-color: rgba(124, 58, 237, 0.3); color: var(--text-primary); }
+        .filter-tabs button.active-filter { background: rgba(124, 58, 237, 0.15); border-color: var(--accent); color: #fff; }
+        .catalog-controls { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; align-items: center; }
+        .catalog-controls .search-wrap { flex: 1; min-width: 200px; position: relative; }
+        .catalog-controls .search-wrap input { width: 100%; padding: 10px 16px 10px 40px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 14px; font-family: inherit; transition: all 0.2s var(--transition); }
+        .catalog-controls .search-wrap input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .catalog-controls .search-wrap i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+        .modal-overlay { display: none; position: fixed; inset: 0; z-index: 2000; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(12px); justify-content: center; align-items: center; padding: 20px; }
+        .modal-overlay.open { display: flex; }
+        .modal { background: var(--bg-secondary); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: var(--radius); padding: 32px; max-width: 640px; width: 100%; max-height: 90vh; overflow-y: auto; animation: slideUp 0.3s var(--transition); }
+        @keyframes slideUp { from { opacity: 0; transform: scale(0.96) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        .modal .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .modal .modal-header h2 { font-size: 22px; font-weight: 800; }
+        .modal .modal-header .close { background: none; border: none; color: var(--text-secondary); font-size: 24px; cursor: pointer; transition: all 0.2s var(--transition); padding: 4px; }
+        .modal .modal-header .close:hover { color: var(--text-primary); transform: rotate(90deg); }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 14px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 14px; font-family: inherit; transition: all 0.2s var(--transition); }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .form-group textarea { resize: vertical; min-height: 60px; }
+        .form-group select option { background: var(--bg-secondary); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 3000; display: flex; flex-direction: column; gap: 8px; max-width: 380px; width: 100%; }
+        .toast { padding: 14px 20px; border-radius: var(--radius-sm); background: var(--bg-secondary); border: 1px solid rgba(255, 255, 255, 0.06); box-shadow: var(--shadow); animation: slideInToast 0.4s var(--transition); display: flex; align-items: center; gap: 12px; font-size: 14px; }
+        .toast.success { border-left: 4px solid var(--success); }
+        .toast.error { border-left: 4px solid var(--danger); }
+        .toast.warning { border-left: 4px solid var(--warning); }
+        .toast.info { border-left: 4px solid var(--secondary); }
+        .toast .icon { font-size: 20px; }
+        .toast .close-toast { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; margin-left: auto; padding: 0 4px; }
+        @keyframes slideInToast { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
+        .profile-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        .profile-card { background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: var(--radius); padding: 24px; }
+        .profile-card .card-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .order-item { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 10px; }
+        .order-item .header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+        .order-item .id { font-weight: 600; font-size: 14px; }
+        .order-item .date { font-size: 12px; color: var(--text-secondary); }
+        .order-item .buyer { font-size: 13px; color: var(--text-secondary); }
+        .order-item .items { font-size: 13px; color: var(--text-secondary); }
+        .order-item .total { font-weight: 700; color: var(--secondary); font-size: 16px; }
+        .order-item .pickup { font-size: 12px; color: var(--text-secondary); }
+        .order-item .status-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+        .rules-list { display: grid; gap: 12px; }
+        .rule-item { background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: var(--radius-sm); padding: 16px 20px; display: flex; gap: 16px; align-items: flex-start; }
+        .rule-item .num { font-size: 20px; font-weight: 800; color: var(--accent); min-width: 32px; }
+        .rule-item .content h4 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+        .rule-item .content p { font-size: 14px; color: var(--text-secondary); }
+        .admin-panel .pickup-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+        .admin-panel .pickup-list .tag { background: rgba(255, 255, 255, 0.05); padding: 4px 14px; border-radius: 20px; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+        .admin-panel .pickup-list .tag .del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 14px; }
+        .my-products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 12px; }
+        .my-product-item { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: var(--radius-sm); padding: 14px; text-align: center; }
+        .my-product-item .icon { font-size: 32px; }
+        .my-product-item .name { font-weight: 600; font-size: 14px; }
+        .my-product-item .price { color: var(--secondary); font-weight: 700; font-size: 13px; }
+        .my-product-item .stock { font-size: 12px; color: var(--text-secondary); }
+        .my-product-item .status-badge { font-size: 10px; padding: 2px 10px; border-radius: 12px; display: inline-block; margin-top: 4px; }
+        .cart-list { display: flex; flex-direction: column; gap: 8px; }
+        .cart-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: var(--radius-sm); gap: 12px; flex-wrap: wrap; }
+        .cart-item .info { flex: 1; min-width: 150px; }
+        .cart-item .info .name { font-weight: 600; font-size: 14px; }
+        .cart-item .info .shop { font-size: 12px; color: var(--accent); }
+        .cart-item .info .price { font-size: 14px; font-weight: 700; color: var(--secondary); margin-top: 2px; }
+        .cart-item .controls { display: flex; align-items: center; gap: 8px; }
+        .cart-item .controls button { width: 30px; height: 30px; border: 1px solid rgba(255, 255, 255, 0.06); border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.04); color: var(--text-primary); font-size: 16px; cursor: pointer; transition: all 0.2s var(--transition); font-family: inherit; display: flex; align-items: center; justify-content: center; }
+        .cart-item .controls button:hover { background: rgba(124, 58, 237, 0.15); border-color: var(--accent); }
+        .cart-item .controls button:disabled { opacity: 0.3; cursor: not-allowed; }
+        .cart-item .controls .qty { font-weight: 700; min-width: 24px; text-align: center; font-size: 14px; }
+        .cart-item .controls .remove { color: var(--danger); border-color: rgba(239, 68, 68, 0.15); }
+        .cart-item .controls .remove:hover { background: rgba(239, 68, 68, 0.15); }
+        .cart-summary { margin-top: 20px; padding: 20px; background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: var(--radius); }
+        .cart-summary .total { font-size: 22px; font-weight: 800; color: var(--secondary); }
+        .cart-summary .total-alt { font-size: 14px; color: var(--text-secondary); }
+        .cart-summary .actions { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+        .balance-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; background: linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(6, 182, 212, 0.18)); border: 1px solid rgba(124, 58, 237, 0.3); font-size: 13px; font-weight: 700; color: var(--text-primary); white-space: nowrap; cursor: pointer; transition: all 0.2s var(--transition); }
+        .balance-badge:hover { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .balance-badge i { color: var(--warning); }
+        .wallet-hero { background: linear-gradient(135deg, rgba(124, 58, 237, 0.12), rgba(6, 182, 212, 0.08)); border: 1px solid rgba(124, 58, 237, 0.25); border-radius: var(--radius); padding: 28px; text-align: center; margin-bottom: 20px; }
+        .wallet-hero .amount { font-size: 40px; font-weight: 900; margin: 8px 0; }
+        .wallet-hero .label { color: var(--text-secondary); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; }
+        .wallet-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 20px; }
+        details.tx-log { background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: var(--radius-sm); padding: 14px 16px; margin-top: 12px; }
+        details.tx-log summary { cursor: pointer; font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; list-style: none; }
         details.tx-log summary::-webkit-details-marker { display: none; }
-        details.tx-log summary::before {
-            content: '\25B8';
-            color: var(--accent);
-            transition: transform 0.2s var(--transition);
-            display: inline-block;
-        }
-        details.tx-log[open] summary::before {
-            transform: rotate(90deg);
-        }
-        details.buyers-panel {
-            background: rgba(124, 58, 237, 0.03);
-            border: 1px solid rgba(124, 58, 237, 0.1);
-            margin-top: 0;
-            margin-bottom: 16px;
-            padding: 16px;
-        }
-        details.buyers-panel summary {
-            font-size: 15px;
-            color: var(--accent);
-        }
-        .tx-list {
-            margin-top: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            max-height: 320px;
-            overflow-y: auto;
-        }
-        .tx-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 10px;
-            background: rgba(255, 255, 255, 0.02);
-            border-radius: 8px;
-            font-size: 13px;
-            flex-wrap: wrap;
-        }
-        .tx-row .tx-desc {
-            color: var(--text-secondary);
-            font-size: 12px;
-        }
+        details.tx-log summary::before { content: '\25B8'; color: var(--accent); transition: transform 0.2s var(--transition); display: inline-block; }
+        details.tx-log[open] summary::before { transform: rotate(90deg); }
+        details.buyers-panel { background: rgba(124, 58, 237, 0.03); border: 1px solid rgba(124, 58, 237, 0.1); margin-top: 0; margin-bottom: 16px; padding: 16px; }
+        details.buyers-panel summary { font-size: 15px; color: var(--accent); }
+        .tx-list { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+        .tx-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(255, 255, 255, 0.02); border-radius: 8px; font-size: 13px; flex-wrap: wrap; }
+        .tx-row .tx-desc { color: var(--text-secondary); font-size: 12px; }
         .tx-row .tx-amount.positive { color: var(--success); font-weight: 700; }
         .tx-row .tx-amount.negative { color: var(--danger); font-weight: 700; }
-        .staff-order-item {
-            background: var(--bg-card);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: var(--radius-sm);
-            padding: 14px;
-            margin-bottom: 10px;
-        }
-        .inline-form {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            align-items: center;
-            margin-top: 10px;
-        }
-        .inline-form input, .inline-form select {
-            flex: 1;
-            min-width: 120px;
-            padding: 9px 12px;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: var(--radius-sm);
-            color: var(--text-primary);
-            font-family: inherit;
-            font-size: 13px;
-        }
-        .payment-hint {
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-top: 4px;
-        }
+        .staff-order-item { background: var(--bg-card); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 10px; }
+        .inline-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+        .inline-form input, .inline-form select { flex: 1; min-width: 120px; padding: 9px 12px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--radius-sm); color: var(--text-primary); font-family: inherit; font-size: 13px; }
+        .payment-hint { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
         .payment-hint.error { color: var(--danger); }
+        .seller-profile-card { background: var(--bg-card); border: 1px solid rgba(124, 58, 237, 0.15); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+        .seller-profile-card .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin: 12px 0; }
+        .seller-profile-card .stat-item { text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.03); border-radius: var(--radius-sm); }
+        .seller-profile-card .stat-item .value { font-size: 24px; font-weight: 800; color: var(--secondary); }
+        .seller-profile-card .stat-item .label { font-size: 12px; color: var(--text-secondary); }
+        .session-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(255, 255, 255, 0.02); border-radius: 8px; margin-bottom: 6px; flex-wrap: wrap; gap: 8px; }
+        .session-item .session-info { font-size: 13px; color: var(--text-secondary); }
+        .session-item .session-info .ip { color: var(--text-primary); font-weight: 600; }
+        .courier-order-group { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 12px; }
+        .courier-order-group .pickup-title { font-size: 16px; font-weight: 700; color: var(--accent); margin-bottom: 10px; }
+        .courier-order-item { background: rgba(255, 255, 255, 0.02); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .archived-orders-list { max-height: 400px; overflow-y: auto; }
+        @media (max-width: 768px) {
+            .header-inner { flex-direction: column; align-items: stretch; gap: 8px; }
+            .nav-links { justify-content: center; }
+            .nav-right { justify-content: center; }
+            .main { padding: 16px; }
+            .products-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+            .product-card { padding: 14px; }
+            .modal { padding: 20px; }
+            .form-row { grid-template-columns: 1fr; }
+            .cart-item { flex-direction: column; align-items: stretch; }
+            .cart-item .controls { justify-content: flex-end; }
+            .page-header h1 { font-size: 22px; }
+            .catalog-controls { flex-direction: column; }
+            .catalog-controls .search-wrap { width: 100%; }
+            .rule-item { flex-direction: column; gap: 8px; }
+        }
+        @media (max-width: 480px) {
+            .products-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+            .product-card { padding: 12px; }
+            .product-card .icon { font-size: 26px; }
+            .product-card .name { font-size: 13px; }
+            .product-card .price { font-size: 15px; }
+            .product-card .actions .btn { font-size: 11px; padding: 4px 8px; }
+            .nav-links button { font-size: 12px; padding: 6px 12px; }
+            .btn { font-size: 12px; padding: 6px 14px; }
+            .modal { padding: 16px; }
+        }
     </style>
 </head>
 <body>
@@ -1180,6 +261,7 @@
                 <button data-page="profile"><i class="fas fa-user"></i> Профиль</button>
                 <button data-page="wishlist"><i class="fas fa-heart"></i> Избранное</button>
                 <button data-page="rules"><i class="fas fa-gavel"></i> Правила</button>
+                <button data-page="courier" id="navCourierBtn" style="display:none;"><i class="fas fa-truck"></i> Доставка</button>
             </nav>
             <div class="nav-right">
                 <span class="balance-badge" id="balanceBadge" style="display:none;" onclick="switchPage('wallet')" title="Открыть кошелёк">
@@ -1293,6 +375,20 @@
                 </div>
             </section>
 
+            <section class="page" id="page-courier">
+                <div class="page-header">
+                    <h1>🚚 Доставка</h1>
+                    <p>Заказы, готовые к выдаче в пунктах выдачи</p>
+                </div>
+                <div id="courierContent">
+                    <div class="empty-state">
+                        <i class="fas fa-truck"></i>
+                        <h3>Нет заказов для доставки</h3>
+                        <p>Все заказы уже выданы или ещё не готовы</p>
+                    </div>
+                </div>
+            </section>
+
             <section class="page" id="page-rules">
                 <div class="page-header">
                     <h1>📜 Правила маркетплейса</h1>
@@ -1310,7 +406,7 @@
         </div>
     </main>
 
-    <!-- MODALS -->
+    <!-- МОДАЛЬНЫЕ ОКНА -->
     <div class="modal-overlay" id="loginModal">
         <div class="modal">
             <div class="modal-header">
@@ -1331,6 +427,7 @@
                     <select id="loginRole">
                         <option value="buyer">Покупатель</option>
                         <option value="seller">Продавец</option>
+                        <option value="courier">Курьер</option>
                     </select>
                 </div>
                 <button type="submit" class="btn btn-primary btn-block" id="loginSubmitBtn">Войти</button>
@@ -1451,6 +548,47 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="sellerProfileModal">
+        <div class="modal" style="max-width: 800px;">
+            <div class="modal-header">
+                <h2 id="sellerProfileTitle">👤 Профиль продавца</h2>
+                <button class="close" onclick="document.getElementById('sellerProfileModal').classList.remove('open')">&times;</button>
+            </div>
+            <div id="sellerProfileContent"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="passwordManagerModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>🔑 Управление паролями</h2>
+                <button class="close" onclick="document.getElementById('passwordManagerModal').classList.remove('open')">&times;</button>
+            </div>
+            <form id="passwordManagerForm">
+                <div class="form-group">
+                    <label>Игрок</label>
+                    <input type="text" id="passwordManagerUsername" placeholder="Логин игрока" required />
+                </div>
+                <div class="form-group">
+                    <label>Новый пароль</label>
+                    <input type="text" id="passwordManagerNewPassword" placeholder="Новый пароль" required />
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Сменить пароль</button>
+            </form>
+            <div id="passwordManagerResult" style="margin-top:12px;"></div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="archiveModal">
+        <div class="modal" style="max-width: 800px;">
+            <div class="modal-header">
+                <h2>📦 Архив заказов</h2>
+                <button class="close" onclick="document.getElementById('archiveModal').classList.remove('open')">&times;</button>
+            </div>
+            <div id="archiveContent" class="archived-orders-list"></div>
+        </div>
+    </div>
+
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
@@ -1460,9 +598,11 @@
         // КОНСТАНТЫ
         // ============================================================
         const ADMIN_USERNAME = 'Admin';
-        const ADMIN_PASSWORD = '691311';
+        const ADMIN_PASSWORD = 'Admin2026!';
         const STAFF_USERNAME = 'staff';
-        const STAFF_PASSWORD = 'staff123';
+        const STAFF_PASSWORD = 'Staff2026!';
+        const COURIER_USERNAME = 'courier';
+        const COURIER_PASSWORD = 'Courier2026!';
         const AR_TO_DIAMONDS = 3;
         const API_URL = '/api/db';
         const CATEGORIES = ['Оружие', 'Броня', 'Еда', 'Зелья', 'Другое'];
@@ -1479,10 +619,6 @@
         // ============================================================
         const apiCache = new Map();
 
-        // Полностью сбрасывает кэш GET-запросов. Нужно вызывать после ЛЮБОЙ
-        // мутации (set/delete), иначе следующий getX() в течение 30 секунд
-        // вернёт старые данные из кэша — визуально будет казаться, что
-        // удаление "не сработало", хотя на сервере всё уже удалено.
         function clearApiCache() { apiCache.clear(); }
 
         async function apiCall(action, table, data = null, id = null) {
@@ -1511,10 +647,6 @@
                 if (action === 'get') {
                     apiCache.set(cacheKey, { data: result, time: Date.now() });
                 } else {
-                    // Любая мутация (set/delete/cancelOrder) может сделать
-                    // ранее закэшированные GET-ответы устаревшими —
-                    // безопаснее сбросить кэш целиком, чем гадать, какие
-                    // ключи задеты.
                     clearApiCache();
                 }
                 return result;
@@ -1525,116 +657,102 @@
         }
 
         // ============================================================
-        // DB
+        // DB ФУНКЦИИ
         // ============================================================
         async function getUsers() { const result = await apiCall('get', 'users'); return result || []; }
-
         async function setUsers(users) { await apiCall('set', 'users', users); }
-
         async function getShops() { const result = await apiCall('get', 'shops'); return result || []; }
-
         async function setShops(shops) { await apiCall('set', 'shops', shops); }
-
         async function getProducts() { const result = await apiCall('get', 'products'); return result || []; }
-
         async function setProducts(products) { await apiCall('set', 'products', products); }
-
         async function getCart(userId) {
             const result = await apiCall('get', 'carts');
             const cart = result.find(c => c.user_id === userId);
             return cart?.items || [];
         }
-
         async function setCart(userId, items) { await apiCall('set', 'carts', [{ user_id: userId, items }]); }
-
         async function getPickupPoints() {
             const result = await apiCall('get', 'pickup_points');
             return result.map(p => p.name) || [];
         }
-
         async function setPickupPoints(points) { await apiCall('set', 'pickup_points', points); }
-
         async function getOrders() { const result = await apiCall('get', 'orders'); return result || []; }
-
         async function setOrders(orders) { await apiCall('set', 'orders', orders); }
-
         async function getBannedUsers() {
             const result = await apiCall('get', 'banned_users');
             return result.map(b => b.username) || [];
         }
-
         async function setBannedUsers(banned) { await apiCall('set', 'banned_users', banned); }
-
         async function getRules() {
             const result = await apiCall('get', 'rules');
             return result.map(r => r.rule_text) || [];
         }
-
         async function setRules(rules) { await apiCall('set', 'rules', rules); }
-
         async function getWishlist(userId) {
             const result = await apiCall('get', 'wishlist');
             return result.filter(w => w.user_id === userId).map(w => w.product_id) || [];
         }
-
         async function setWishlist(userId, productIds) { await apiCall('set', 'wishlist', { user_id: userId,
                 product_ids: productIds }); }
-
         async function deleteProductDB(id) { await apiCall('delete', 'products', null, id); }
-
         async function deleteShopDB(id) { await apiCall('delete', 'shops', null, id); }
-
         async function deleteUserDB(id) { await apiCall('delete', 'users', null, id); }
-
-        // ============================================================
-        // БАЛАНС / ТРАНЗАКЦИИ (НОВОЕ)
-        // ============================================================
         async function getBalances() { const result = await apiCall('get', 'balances'); return result || []; }
-
         async function getBalanceFor(username) {
             const balances = await getBalances();
             const row = balances.find(b => b.username === username);
             return row ? Number(row.balance) : 0;
         }
-
         async function getAllTransactions() { const result = await apiCall('get', 'transactions'); return result || []; }
-
         async function getTransactionsFor(username) {
             const all = await getAllTransactions();
             return all.filter(t => t.username === username);
         }
-
         async function topUpBalanceDB(username, amount, actor) {
             return apiCall('topUpBalance', 'balances', { username, amount, actor });
         }
-
         async function transferBalanceDB(from, to, amount) {
             return apiCall('transferBalance', 'balances', { from, to, amount });
         }
-
         async function withdrawBalanceDB(username, amount, pickup) {
             return apiCall('withdrawBalance', 'balances', { username, amount, pickup });
         }
-
         async function toggleBlockUserDB(username, blocked) {
             return apiCall('toggleBlockUser', 'users', { username, blocked });
         }
-
         async function adminResetBalanceDB(username, actor) {
             return apiCall('adminResetBalance', 'balances', { username, actor });
         }
-
         async function adminCancelOrderDB(orderId, actor) {
             return apiCall('adminCancelOrder', 'orders', { actor }, orderId);
         }
-
         async function placeOrderDB(payload) {
             return apiCall('placeOrder', 'orders', payload);
         }
-
         async function getAllData() {
             const result = await apiCall('getAll');
             return result;
+        }
+        async function getSellerProfile(username) {
+            return apiCall('getSellerProfile', null, { username });
+        }
+        async function changePasswordDB(username, newPassword, actor) {
+            return apiCall('changePassword', null, { username, newPassword, actor });
+        }
+        async function getAdminSessions(username) {
+            return apiCall('getAdminSessions', null, { username });
+        }
+        async function revokeAdminSession(username, token) {
+            return apiCall('revokeAdminSession', null, { username, token });
+        }
+        async function getCourierOrders() {
+            return apiCall('getCourierOrders');
+        }
+        async function courierCompleteOrder(orderId, courier, pickup) {
+            return apiCall('courierCompleteOrder', null, { orderId, courier, pickup });
+        }
+        async function archiveOrders() {
+            return apiCall('archiveOrders');
         }
 
         function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -1659,33 +777,27 @@
         // ============================================================
         let currentUser = null;
         let cachedAllData = null;
+        let adminSessionToken = null;
 
         async function initData() {
             try {
                 cachedAllData = await getAllData();
                 const users = cachedAllData.users;
-                if (!users.find(u => u.username === ADMIN_USERNAME)) {
-                    await setUsers([{
-                        username: ADMIN_USERNAME,
-                        password: ADMIN_PASSWORD,
-                        role: 'admin',
-                        shop_id: null,
-                        approved: true,
-                        pending: false,
-                        blocked: false
-                    }]);
+                
+                // Создаём дефолтных пользователей
+                const defaultUsers = [
+                    { username: ADMIN_USERNAME, password: ADMIN_PASSWORD, role: 'admin', shop_id: null, approved: true, pending: false, blocked: false },
+                    { username: STAFF_USERNAME, password: STAFF_PASSWORD, role: 'staff', shop_id: null, approved: true, pending: false, blocked: false },
+                    { username: COURIER_USERNAME, password: COURIER_PASSWORD, role: 'courier', shop_id: null, approved: true, pending: false, blocked: false }
+                ];
+                
+                for (const defUser of defaultUsers) {
+                    if (!users.find(u => u.username === defUser.username)) {
+                        users.push(defUser);
+                    }
                 }
-                if (!users.find(u => u.username === STAFF_USERNAME)) {
-                    await setUsers([{
-                        username: STAFF_USERNAME,
-                        password: STAFF_PASSWORD,
-                        role: 'staff',
-                        shop_id: null,
-                        approved: true,
-                        pending: false,
-                        blocked: false
-                    }]);
-                }
+                await setUsers(users);
+
                 const points = cachedAllData.pickupPoints;
                 if (points.length === 0) {
                     await setPickupPoints(['Спавн', 'Рынок', 'Город Северный', 'Город Восточный', 'Город Западный']);
@@ -1707,6 +819,8 @@
                 try {
                     const data = sessionStorage.getItem('wcm_user');
                     if (data) currentUser = JSON.parse(data);
+                    const token = sessionStorage.getItem('wcm_admin_token');
+                    if (token) adminSessionToken = token;
                 } catch { currentUser = null; }
                 console.log('✅ Данные инициализированы');
                 return true;
@@ -1721,9 +835,30 @@
 
         function setCurrentUser(user) {
             currentUser = user;
-            if (user) { sessionStorage.setItem('wcm_user', JSON.stringify(user)); } else { sessionStorage
-                    .removeItem('wcm_user'); }
+            if (user) {
+                sessionStorage.setItem('wcm_user', JSON.stringify(user));
+                // Создаём сессию для админа
+                if (user.role === 'admin') {
+                    createAdminSession(user.username);
+                }
+            } else {
+                sessionStorage.removeItem('wcm_user');
+                sessionStorage.removeItem('wcm_admin_token');
+                adminSessionToken = null;
+            }
             renderUI();
+        }
+
+        async function createAdminSession(username) {
+            try {
+                const result = await apiCall('createAdminSession', null, { username, ip: 'browser' });
+                if (result.token) {
+                    adminSessionToken = result.token;
+                    sessionStorage.setItem('wcm_admin_token', result.token);
+                }
+            } catch (error) {
+                console.error('Ошибка создания сессии:', error);
+            }
         }
 
         async function isUserBlocked(username) {
@@ -1746,10 +881,6 @@
                 e.preventDefault();
                 switchAuthMode('register');
             };
-        };
-
-        window.closeModal = function(id) {
-            document.getElementById(id).classList.remove('open');
         };
 
         function switchAuthMode(mode) {
@@ -1795,14 +926,14 @@
                     password,
                     role: role,
                     shop_id: null,
-                    approved: role === 'buyer' ? true : false,
+                    approved: role === 'buyer' || role === 'courier' ? true : false,
                     pending: role === 'seller' ? true : false,
                     blocked: false
                 };
                 users.push(newUser);
                 await setUsers(users);
-                if (role === 'buyer') {
-                    setCurrentUser({ username, role: 'buyer' });
+                if (role === 'buyer' || role === 'courier') {
+                    setCurrentUser({ username, role });
                     showToast('Добро пожаловать, ' + username + '!', 'success');
                     document.getElementById('loginModal').classList.remove('open');
                     renderUI();
@@ -1888,7 +1019,7 @@
         });
 
         // ============================================================
-        // ТОВАРЫ (ДОБАВЛЕНИЕ ПРОДАВЦОМ)
+        // ТОВАРЫ
         // ============================================================
         document.getElementById('productForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -1963,9 +1094,7 @@
         // АДМИН-ПАНЕЛЬ
         // ============================================================
 
-        // ----- УДАЛЕНИЕ ПРОДАВЦА -----
         window.deleteSeller = async function(sellerUsername) {
-            console.log('🗑️ Удаление продавца:', sellerUsername);
             const user = getCurrentUser();
             if (!user || user.role !== 'admin') {
                 showToast('Только администратор может удалять продавцов!', 'error');
@@ -1978,81 +1107,57 @@
             if (!confirm('🔴 УДАЛИТЬ ПРОДАВЦА: ' + sellerUsername + '?\n\n⚠️ ВСЕ данные будут БЕЗВОЗВРАТНО УДАЛЕНЫ!'))
             return;
             try {
-                const users = await getUsers();
-                const seller = users.find(u => u.username === sellerUsername);
-                if (!seller || seller.role !== 'seller') {
-                    showToast('Продавец не найден', 'error');
-                    return;
-                }
-                // Один запрос — сервер сам каскадно удаляет товары, wishlist,
-                // заказы, магазин и запись из banned_users внутри транзакции.
-                // Раньше здесь массивы фильтровались на клиенте и отправлялись
-                // через action:'set', который делает только upsert и НИЧЕГО
-                // не удаляет — поэтому кнопка визуально "не работала".
                 await deleteUserDB(sellerUsername);
                 clearApiCache();
                 showToast('🗑️ Продавец "' + sellerUsername + '" полностью удалён!', 'warning');
                 renderUI();
             } catch (error) {
-                console.error('Ошибка удаления продавца:', error, 'table:', error.table, 'constraint:', error.constraint, 'detail:', error.detail);
-                showToast('❌ Ошибка: ' + error.message + (error.detail ? ' (' + error.detail + ')' : ''), 'error');
+                console.error('Ошибка удаления продавца:', error);
+                showToast('❌ Ошибка: ' + error.message, 'error');
             }
         };
 
-        // ----- УДАЛЕНИЕ ТОВАРА (ИСПРАВЛЕНО) -----
         window.deleteProduct = async function(productId, fromAdmin = false) {
-            console.log('🗑️ Удаление товара ID:', productId, 'fromAdmin:', fromAdmin);
             const user = getCurrentUser();
-
             if (!productId) {
-                console.error('❌ productId не передан!');
                 showToast('Ошибка: ID товара не найден', 'error');
                 return;
             }
-
             try {
                 const products = await getProducts();
                 const product = products.find(p => p.id === productId);
                 if (!product) {
                     showToast('Товар не найден', 'error');
-                    console.error('❌ Товар с ID', productId, 'не найден в базе');
                     return;
                 }
-
                 if (!fromAdmin) {
                     if (!user || user.username !== product.seller) {
                         showToast('У вас нет прав на удаление этого товара!', 'error');
                         return;
                     }
                     if (!confirm('Удалить товар "' + product.name + '"?')) return;
-                    // Реальный DELETE вместо upsert-только 'set': сервер сам
-                    // чистит связанные записи в wishlist, затем удаляет товар.
                     await deleteProductDB(productId);
                     clearApiCache();
                     showToast('Товар "' + product.name + '" удалён', 'info');
                     renderUI();
                     return;
                 }
-
                 if (!user || user.role !== 'admin') {
                     showToast('Только администратор может удалять чужие товары!', 'error');
                     return;
                 }
                 if (!confirm('🔴 Удалить товар "' + product.name + '"?')) return;
-
                 await deleteProductDB(productId);
                 clearApiCache();
                 showToast('🗑️ Товар "' + product.name + '" удалён администратором!', 'warning');
                 renderUI();
             } catch (error) {
-                console.error('Ошибка удаления товара:', error, 'table:', error.table, 'constraint:', error.constraint, 'detail:', error.detail);
-                showToast('❌ Ошибка: ' + error.message + (error.detail ? ' (' + error.detail + ')' : ''), 'error');
+                console.error('Ошибка удаления товара:', error);
+                showToast('❌ Ошибка: ' + error.message, 'error');
             }
         };
 
-        // ----- ОДОБРЕНИЕ МАГАЗИНА -----
         window.approveShop = async function(shopId, approve) {
-            console.log('📝 Одобрение магазина:', shopId, approve);
             try {
                 const shops = await getShops();
                 const shop = shops.find(s => s.id === shopId);
@@ -2082,9 +1187,7 @@
             }
         };
 
-        // ----- ОДОБРЕНИЕ ТОВАРА -----
         window.approveProduct = async function(productId, approve) {
-            console.log('📝 Одобрение товара:', productId, approve);
             try {
                 const products = await getProducts();
                 const product = products.find(p => p.id === productId);
@@ -2104,9 +1207,7 @@
             }
         };
 
-        // ----- БЛОКИРОВКА -----
         window.toggleBlockUser = async function(username) {
-            console.log('🔒 Блокировка пользователя:', username);
             const user = getCurrentUser();
             if (!user || user.role !== 'admin') {
                 showToast('Только администратор может блокировать пользователей!', 'error');
@@ -2117,8 +1218,6 @@
                 const isBanned = banned.includes(username);
                 if (!isBanned) {
                     if (confirm('🔒 Заблокировать пользователя ' + username + '?\n\nВСЕ его товары будут УДАЛЕНЫ, а баланс аннулирован!')) {
-                        // ИСПРАВЛЕНО: setProducts делает только upsert и не может
-                        // удалить строки — нужно реально DELETE каждый товар.
                         const products = await getProducts();
                         const sellerProducts = products.filter(p => p.seller === username);
                         for (const p of sellerProducts) {
@@ -2140,7 +1239,315 @@
             }
         };
 
-        // ----- БАЛАНС: ТРАНЗАКЦИИ, ПОПОЛНЕНИЕ, ПЕРЕВОДЫ, ВЫВОД (НОВОЕ) -----
+        // ============================================================
+        // ПРОСМОТР ПРОФИЛЯ ПРОДАВЦА (АДМИН)
+        // ============================================================
+        window.viewSellerProfile = async function(username) {
+            const user = getCurrentUser();
+            if (!user || user.role !== 'admin') {
+                showToast('Только администратор может просматривать профили продавцов!', 'error');
+                return;
+            }
+            try {
+                const data = await getSellerProfile(username);
+                const modal = document.getElementById('sellerProfileModal');
+                const content = document.getElementById('sellerProfileContent');
+                document.getElementById('sellerProfileTitle').textContent = '👤 Профиль: ' + username;
+                
+                let html = `
+                    <div class="seller-profile-card">
+                        <div class="stat-grid">
+                            <div class="stat-item">
+                                <div class="value">${data.stats.totalProducts}</div>
+                                <div class="label">Товаров</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="value">${data.stats.totalOrders}</div>
+                                <div class="label">Заказов</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="value">${data.stats.totalEarned.toFixed(2)} АР</div>
+                                <div class="label">Заработано</div>
+                            </div>
+                            <div class="stat-item">
+                                <div class="value">${data.balance.toFixed(2)} АР</div>
+                                <div class="label">Баланс</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                if (data.shop) {
+                    html += `
+                        <div class="profile-card">
+                            <div class="card-title">🏪 ${data.shop.name}</div>
+                            <p>${data.shop.description || 'Без описания'}</p>
+                            <span class="badge ${data.shop.approved ? 'badge-success' : 'badge-warning'}">${data.shop.approved ? '✅ Одобрен' : '⏳ На проверке'}</span>
+                        </div>
+                    `;
+                }
+
+                if (data.products.length > 0) {
+                    html += `
+                        <div class="profile-card">
+                            <div class="card-title">📦 Товары (${data.products.length})</div>
+                            <div class="my-products-grid">
+                                ${data.products.map(p => `
+                                    <div class="my-product-item">
+                                        <div class="icon">${p.icon || '📦'}</div>
+                                        <div class="name">${p.name}</div>
+                                        <div class="price">🟣 ${p.price_ar.toFixed(2)} АР</div>
+                                        <div class="stock">📦 ${p.stock}</div>
+                                        <div class="status-badge ${p.status === 'approved' ? 'badge-success' : p.status === 'pending' ? 'badge-warning' : 'badge-danger'}">${p.status === 'approved' ? '✅ Опубликован' : p.status === 'pending' ? '⏳ На проверке' : '❌ Отклонён'}</div>
+                                        <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}', true)">🗑️</button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (data.orders.length > 0) {
+                    const statusLabels = { 'pending': '⏳ Ожидает', 'processing': '🔄 В обработке', 'ready': '✅ Готов', 'completed': '📦 Выдан', 'cancelled': '❌ Отменён' };
+                    html += `
+                        <div class="profile-card">
+                            <div class="card-title">📦 Заказы (${data.orders.length})</div>
+                            ${data.orders.slice(0, 20).map(o => `
+                                <div class="order-item">
+                                    <div class="header"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at).toLocaleString()}</span></div>
+                                    <div class="buyer">👤 ${o.buyer}</div>
+                                    <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
+                                    <div class="total">${o.total_ar.toFixed(2)} АР</div>
+                                    <span class="badge ${o.status === 'completed' ? 'badge-success' : o.status === 'cancelled' ? 'badge-danger' : 'badge-warning'}">${statusLabels[o.status] || o.status}</span>
+                                </div>
+                            `).join('')}
+                            ${data.orders.length > 20 ? `<p style="color:var(--text-secondary);font-size:13px;">... и ещё ${data.orders.length - 20} заказов</p>` : ''}
+                        </div>
+                    `;
+                }
+
+                if (data.transactions.length > 0) {
+                    html += `
+                        <details class="tx-log" open>
+                            <summary>💰 Транзакции (${data.transactions.length})</summary>
+                            <div class="tx-list">${renderTransactionRows(data.transactions)}</div>
+                        </details>
+                    `;
+                }
+
+                // Кнопки управления
+                html += `
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">
+                        <button class="btn btn-danger" onclick="adminResetBalance('${username}')"><i class="fas fa-ban"></i> Обнулить баланс</button>
+                        <button class="btn btn-danger" onclick="toggleBlockUser('${username}')"><i class="fas fa-lock"></i> Блокировать</button>
+                        <button class="btn btn-danger" onclick="deleteSeller('${username}')"><i class="fas fa-user-slash"></i> Удалить продавца</button>
+                    </div>
+                `;
+
+                content.innerHTML = html;
+                modal.classList.add('open');
+            } catch (error) {
+                console.error('Ошибка загрузки профиля:', error);
+                showToast('❌ Ошибка: ' + error.message, 'error');
+            }
+        };
+
+        // ============================================================
+        // УПРАВЛЕНИЕ ПАРОЛЯМИ (АДМИН)
+        // ============================================================
+        window.openPasswordManager = function() {
+            const user = getCurrentUser();
+            if (!user || user.role !== 'admin') {
+                showToast('Только администратор может управлять паролями!', 'error');
+                return;
+            }
+            document.getElementById('passwordManagerModal').classList.add('open');
+            document.getElementById('passwordManagerResult').innerHTML = '';
+        };
+
+        document.getElementById('passwordManagerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const user = getCurrentUser();
+            if (!user || user.role !== 'admin') {
+                showToast('Только администратор может менять пароли!', 'error');
+                return;
+            }
+            const username = document.getElementById('passwordManagerUsername').value.trim();
+            const newPassword = document.getElementById('passwordManagerNewPassword').value.trim();
+            if (!username || !newPassword) {
+                showToast('Заполните все поля!', 'error');
+                return;
+            }
+            try {
+                await changePasswordDB(username, newPassword, user.username);
+                document.getElementById('passwordManagerResult').innerHTML = `<div class="badge badge-success">✅ Пароль для "${username}" изменён на "${newPassword}"</div>`;
+                showToast('✅ Пароль изменён!', 'success');
+                document.getElementById('passwordManagerUsername').value = '';
+                document.getElementById('passwordManagerNewPassword').value = '';
+            } catch (error) {
+                document.getElementById('passwordManagerResult').innerHTML = `<div class="badge badge-danger">❌ ${error.message}</div>`;
+                showToast('❌ Ошибка: ' + error.message, 'error');
+            }
+        });
+
+        // ============================================================
+        // СЕССИИ АДМИНА
+        // ============================================================
+        async function renderAdminSessions() {
+            const user = getCurrentUser();
+            if (!user || user.role !== 'admin') return;
+            try {
+                const sessions = await getAdminSessions(user.username);
+                const container = document.getElementById('adminSessionsContainer');
+                if (!container) return;
+                if (sessions.length === 0) {
+                    container.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;">Нет активных сессий</p>';
+                    return;
+                }
+                container.innerHTML = sessions.map(s => `
+                    <div class="session-item">
+                        <div class="session-info">
+                            <span class="ip">${s.ip || 'unknown'}</span>
+                            <span style="color:var(--text-secondary);font-size:12px;">${new Date(s.created_at).toLocaleString()}</span>
+                            ${s.token === adminSessionToken ? ' <span class="badge badge-success">Текущая</span>' : ''}
+                        </div>
+                        ${s.token !== adminSessionToken ? `<button class="btn btn-danger btn-sm" onclick="revokeSession('${s.token}')">Завершить</button>` : ''}
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Ошибка загрузки сессий:', error);
+            }
+        }
+
+        window.revokeSession = async function(token) {
+            const user = getCurrentUser();
+            if (!user || user.role !== 'admin') return;
+            if (!confirm('Завершить эту сессию?')) return;
+            try {
+                await revokeAdminSession(user.username, token);
+                showToast('Сессия завершена', 'info');
+                renderAdminSessions();
+            } catch (error) {
+                showToast('❌ Ошибка: ' + error.message, 'error');
+            }
+        };
+
+        // ============================================================
+        // КУРЬЕР
+        // ============================================================
+        async function renderCourier() {
+            const container = document.getElementById('courierContent');
+            const user = getCurrentUser();
+            if (!user || user.role !== 'courier') {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-truck"></i>
+                        <h3>Только для курьеров</h3>
+                        <p>Войдите как курьер, чтобы видеть заказы для доставки</p>
+                    </div>
+                `;
+                return;
+            }
+            try {
+                const data = await getCourierOrders();
+                if (data.total === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-truck"></i>
+                            <h3>Нет заказов для доставки</h3>
+                            <p>Все заказы уже выданы или ещё не готовы</p>
+                        </div>
+                    `;
+                    return;
+                }
+                let html = `<p style="color:var(--text-secondary);margin-bottom:16px;">📦 Заказов для доставки: ${data.total}</p>`;
+                for (const [pickup, orders] of Object.entries(data.grouped)) {
+                    html += `
+                        <div class="courier-order-group">
+                            <div class="pickup-title">📍 ${pickup}</div>
+                            ${orders.map(o => `
+                                <div class="courier-order-item">
+                                    <div>
+                                        <div><strong>#${o.id}</strong> · 👤 ${o.buyer} → 🏪 ${o.seller}</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
+                                        <div style="font-size:12px;color:var(--text-secondary);">${o.total_ar.toFixed(2)} АР · ${o.payment_method === 'balance' ? '💳 Оплачено' : '💵 При получении'}</div>
+                                    </div>
+                                    <button class="btn btn-success btn-sm" onclick="deliverOrder('${o.id}', '${pickup}')">
+                                        <i class="fas fa-hand-holding"></i> Выдать
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+                container.innerHTML = html;
+            } catch (error) {
+                console.error('Ошибка загрузки заказов для курьера:', error);
+                container.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>Ошибка загрузки</h3><p>${error.message}</p></div>`;
+            }
+        }
+
+        window.deliverOrder = async function(orderId, pickup) {
+            const user = getCurrentUser();
+            if (!user || user.role !== 'courier') {
+                showToast('Только курьер может выдавать заказы!', 'error');
+                return;
+            }
+            if (!confirm(`Выдать заказ #${orderId} на ПВЗ "${pickup}"?`)) return;
+            try {
+                const result = await courierCompleteOrder(orderId, user.username, pickup);
+                if (result && result.error) throw new Error(result.error);
+                showToast('✅ Заказ выдан! Комиссия 1 АР начислена.', 'success');
+                renderCourier();
+                renderUI();
+            } catch (error) {
+                showToast('❌ Ошибка: ' + error.message, 'error');
+            }
+        };
+
+        // ============================================================
+        // АРХИВ ЗАКАЗОВ
+        // ============================================================
+        window.openArchive = async function() {
+            const user = getCurrentUser();
+            if (!user) {
+                showToast('Войдите в аккаунт!', 'warning');
+                return;
+            }
+            try {
+                // Сначала архивируем старые заказы
+                await archiveOrders();
+                // Загружаем архив (через get)
+                const archiveData = await apiCall('get', 'orders_archive');
+                const modal = document.getElementById('archiveModal');
+                const content = document.getElementById('archiveContent');
+                
+                if (archiveData.length === 0) {
+                    content.innerHTML = '<p style="color:var(--text-secondary);">Архив пуст</p>';
+                } else {
+                    const statusLabels = { 'pending': '⏳ Ожидает', 'processing': '🔄 В обработке', 'ready': '✅ Готов', 'completed': '📦 Выдан', 'cancelled': '❌ Отменён' };
+                    content.innerHTML = archiveData.map(o => `
+                        <div class="order-item">
+                            <div class="header"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at).toLocaleString()}</span></div>
+                            <div>👤 ${o.buyer} → 🏪 ${o.seller}</div>
+                            <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
+                            <div class="flex-between" style="margin-top:6px;">
+                                <span class="total">${o.total_ar.toFixed(2)} АР</span>
+                                <span class="badge ${o.status === 'completed' ? 'badge-success' : 'badge-danger'}">${statusLabels[o.status] || o.status}</span>
+                            </div>
+                            <div style="font-size:11px;color:var(--text-secondary);">Архивирован: ${new Date(o.archived_at).toLocaleString()}</div>
+                        </div>
+                    `).join('');
+                }
+                modal.classList.add('open');
+            } catch (error) {
+                showToast('❌ Ошибка загрузки архива: ' + error.message, 'error');
+            }
+        };
+
+        // ============================================================
+        // ТРАНЗАКЦИИ (ВСПОМОГАТЕЛЬНЫЕ)
+        // ============================================================
         const TX_LABELS = {
             topup: { icon: '➕', label: 'Пополнение' },
             purchase: { icon: '🛒', label: 'Покупка' },
@@ -2151,7 +1558,8 @@
             withdraw: { icon: '🏧', label: 'Вывод средств' },
             withdraw_payout: { icon: '🏧', label: 'Выдача при выводе' },
             balance_voided: { icon: '🔒', label: 'Аннулирование баланса' },
-            balance_reset: { icon: '🚫', label: 'Обнуление баланса (админ)' }
+            balance_reset: { icon: '🚫', label: 'Обнуление баланса (админ)' },
+            delivery_fee: { icon: '🚚', label: 'Доставка' }
         };
 
         function renderTransactionRows(transactions) {
@@ -2171,6 +1579,9 @@
             }).join('');
         }
 
+        // ============================================================
+        // БАЛАНС: ОБРАБОТЧИКИ
+        // ============================================================
         window.handleAdminTopUp = async function(e) {
             e.preventDefault();
             const user = getCurrentUser();
@@ -2180,6 +1591,10 @@
             }
             const username = document.getElementById('adminTopUpUsername').value.trim();
             const amount = parseFloat(document.getElementById('adminTopUpAmount').value);
+            if (!username || !amount || amount <= 0) {
+                showToast('Заполните все поля корректно!', 'error');
+                return false;
+            }
             try {
                 const result = await topUpBalanceDB(username, amount, user.username);
                 if (!result || result.error) throw new Error((result && result.error) || 'Ошибка пополнения');
@@ -2199,6 +1614,10 @@
             if (!user) return false;
             const to = document.getElementById('transferTo').value.trim();
             const amount = parseFloat(document.getElementById('transferAmount').value);
+            if (!to || !amount || amount <= 0) {
+                showToast('Заполните все поля корректно!', 'error');
+                return false;
+            }
             try {
                 const result = await transferBalanceDB(user.username, to, amount);
                 if (!result || result.error) throw new Error((result && result.error) || 'Ошибка перевода');
@@ -2216,6 +1635,10 @@
             if (!user || user.role !== 'seller') return false;
             const amount = parseFloat(document.getElementById('withdrawAmount').value);
             const pickup = document.getElementById('withdrawPickup').value;
+            if (!amount || amount <= 0) {
+                showToast('Укажите сумму для вывода!', 'error');
+                return false;
+            }
             try {
                 const result = await withdrawBalanceDB(user.username, amount, pickup);
                 if (!result || result.error) throw new Error((result && result.error) || 'Ошибка вывода средств');
@@ -2227,266 +1650,92 @@
             return false;
         };
 
-        // ============================================================
-        // КОШЕЛЁК (renderWallet) — НОВОЕ
-        // ============================================================
-        async function renderWallet() {
-            const container = document.getElementById('walletContent');
+        window.adminResetBalance = async function(username) {
             const user = getCurrentUser();
-            if (!user) {
-                container.innerHTML =
-                    `<div class="empty-state"><i class="fas fa-wallet"></i><h3>Войдите в аккаунт</h3><button class="btn btn-primary" onclick="openLogin()">Войти</button></div>`;
+            if (!user || user.role !== 'admin') {
+                showToast('Только администратор может обнулять баланс!', 'error');
                 return;
             }
+            if (!confirm('❓ Обнулить баланс покупателя ' + username + '?')) return;
+            try {
+                const result = await adminResetBalanceDB(username, user.username);
+                if (!result || result.error) throw new Error((result && result.error) || 'Ошибка обнуления баланса');
+                showToast('✅ Баланс покупателя ' + username + ' обнулён', 'success');
+                renderUI();
+            } catch (error) {
+                showToast('❌ ' + error.message, 'error');
+            }
+        };
 
-            const balance = await getBalanceFor(user.username);
-            const myTx = await getTransactionsFor(user.username);
+        window.adminCancelOrder = async function(orderId) {
+            const user = getCurrentUser();
+            if (!user || user.role !== 'admin') {
+                showToast('Только администратор может отменять заказы так!', 'error');
+                return;
+            }
+            if (!confirm('❓ Отменить заказ #' + orderId + ' из-за технических неполадок?\n\nТовары будут возвращены на склад, а деньги (если оплачено с баланса) — покупателю.'))
+                return;
+            try {
+                const result = await adminCancelOrderDB(orderId, user.username);
+                if (!result || result.error) throw new Error((result && result.error) || 'Ошибка отмены заказа');
+                showToast('✅ Заказ #' + orderId + ' отменён из-за технических неполадок', 'success');
+                renderUI();
+            } catch (error) {
+                showToast('❌ ' + error.message, 'error');
+            }
+        };
 
-            let html = `
-                <div class="wallet-hero">
-                    <div class="label">Баланс</div>
-                    <div class="amount text-gradient">🟣 ${balance.toFixed(2)} АР</div>
-                    <div class="label">≈ ${(balance * AR_TO_DIAMONDS).toFixed(2)} алмазов</div>
-                </div>
-            `;
-
-            if (user.role === 'staff') {
-                const orders = await getOrders();
-                const readyOrders = orders.filter(o => o.status === 'ready');
-                html += `
-                    <div class="wallet-grid">
-                        <div class="profile-card">
-                            <div class="card-title"><i class="fas fa-coins"></i> Пополнить баланс игрока</div>
-                            <p style="color:var(--text-secondary);font-size:13px;">Выдача денег наличными/предметами на ПВЗ — отразите её здесь</p>
-                            <form class="inline-form" onsubmit="return handleAdminTopUp(event)">
-                                <input type="text" id="adminTopUpUsername" placeholder="Логин игрока" required />
-                                <input type="number" id="adminTopUpAmount" placeholder="Сумма АР" min="0.01" step="0.01" required />
-                                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Пополнить</button>
-                            </form>
-                        </div>
-                    </div>
-                    <div class="profile-card">
-                        <div class="card-title"><i class="fas fa-box-open"></i> Заказы, готовые к выдаче (${readyOrders.length})</div>
-                `;
-                if (readyOrders.length === 0) {
-                    html += `<p style="color:var(--text-secondary);font-size:14px;">Нет заказов, ожидающих выдачи</p>`;
+        window.cancelOrder = async function(orderId) {
+            const user = getCurrentUser();
+            if (!user) {
+                showToast('Войдите в аккаунт!', 'warning');
+                return;
+            }
+            if (!confirm('❓ Вы уверены, что хотите отменить заказ #' + orderId + '?\n\nТовары будут возвращены на склад.'))
+                return;
+            try {
+                const result = await apiCall('cancelOrder', 'orders', { buyer: user.username }, orderId);
+                if (result.success) {
+                    showToast('✅ Заказ отменён! Товары возвращены на склад.', 'success');
+                    renderUI();
+                }
+            } catch (error) {
+                if (error.message.includes('15 минут')) {
+                    showToast('❌ ' + error.message, 'error');
                 } else {
-                    for (const o of readyOrders.slice().reverse()) {
-                        html += `
-                            <div class="staff-order-item">
-                                <div class="header flex-between"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at).toLocaleString()}</span></div>
-                                <div>👤 Покупатель: <strong>${o.buyer}</strong> · 🏪 Продавец: ${o.seller}</div>
-                                <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
-                                <div>📍 ${o.pickup} · ${o.payment_method === 'balance' ? '💳 Оплачен с баланса' : '💵 Оплата при получении: ' + o.total_ar.toFixed(2) + ' АР'}</div>
-                                <div style="margin-top:8px;">
-                                    <button class="btn btn-success btn-sm" onclick="completeOrderByStaff('${o.id}', this)"><i class="fas fa-hand-holding"></i> Выдать заказ</button>
-                                </div>
-                            </div>
-                        `;
-                    }
+                    showToast('❌ ' + error.message, 'error');
                 }
-                html += `</div>`;
-            } else {
-                html += `
-                    <div class="wallet-grid">
-                        <div class="profile-card">
-                            <div class="card-title"><i class="fas fa-paper-plane"></i> Перевести другому игроку</div>
-                            <form class="inline-form" onsubmit="return handleTransfer(event)">
-                                <input type="text" id="transferTo" placeholder="Логин получателя" required />
-                                <input type="number" id="transferAmount" placeholder="Сумма АР" min="0.01" step="0.01" max="${balance}" required />
-                                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-paper-plane"></i> Перевести</button>
-                            </form>
-                        </div>
-                `;
-                if (user.role === 'seller') {
-                    const points = await getPickupPoints();
-                    html += `
-                        <div class="profile-card">
-                            <div class="card-title"><i class="fas fa-hand-holding-usd"></i> Вывести средства через ПВЗ</div>
-                            <form class="inline-form" onsubmit="return handleWithdraw(event)">
-                                <select id="withdrawPickup" required>${points.map(p => `<option value="${p}">${p}</option>`).join('')}</select>
-                                <input type="number" id="withdrawAmount" placeholder="Сумма АР" min="0.01" step="0.01" max="${balance}" required />
-                                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-hand-holding-usd"></i> Вывести</button>
-                            </form>
-                        </div>
-                    `;
-                }
-                html += `</div>`;
             }
+        };
 
-            html += `
-                <details class="tx-log" open>
-                    <summary><i class="fas fa-receipt"></i> История операций (${myTx.length})</summary>
-                    <div class="tx-list">${renderTransactionRows(myTx.slice().reverse())}</div>
-                </details>
-            `;
-
-            container.innerHTML = html;
-        }
-
-        // ----- ПУНКТЫ ВЫДАЧИ -----
-        window.addPickupPoint = async function() {
-            console.log('➕ Добавление пункта выдачи');
+        window.updateOrderStatus = async function(orderId, status, btnEl) {
             const user = getCurrentUser();
-            if (!user || user.role !== 'admin') {
-                showToast('Только администратор может добавлять пункты выдачи!', 'error');
+            if (!user || user.role !== 'seller') {
+                showToast('Только продавец может изменять статус заказа!', 'error');
                 return;
             }
-            const name = prompt('Введите название нового пункта выдачи:');
-            if (!name || name.trim() === '') return;
+            const btn = btnEl || (window.event && window.event.target && window.event.target.closest('button'));
+            const originalHtml = btn ? btn.innerHTML : null;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Обновляем...';
+            }
             try {
-                const points = await getPickupPoints();
-                if (points.includes(name.trim())) {
-                    showToast('Такой пункт уже существует!', 'warning');
-                    return;
+                const result = await apiCall('updateOrderStatus', 'orders', { seller: user.username, status }, orderId);
+                if (!result || result.error) {
+                    throw new Error((result && result.error) || 'Не удалось обновить статус');
                 }
-                points.push(name.trim());
-                await setPickupPoints(points);
-                showToast('Пункт "' + name.trim() + '" добавлен!', 'success');
+                showToast('📦 Статус заказа обновлён: ' + status, 'success');
                 renderUI();
             } catch (error) {
-                console.error('Ошибка добавления пункта:', error);
+                console.error('Ошибка обновления статуса заказа:', error);
                 showToast('❌ Ошибка: ' + error.message, 'error');
-            }
-        };
-
-        window.removePickupPoint = async function(name) {
-            console.log('🗑️ Удаление пункта выдачи:', name);
-            const user = getCurrentUser();
-            if (!user || user.role !== 'admin') {
-                showToast('Только администратор может удалять пункты выдачи!', 'error');
-                return;
-            }
-            if (!confirm('Удалить пункт "' + name + '"?')) return;
-            try {
-                let points = await getPickupPoints();
-                points = points.filter(p => p !== name);
-                await setPickupPoints(points);
-                showToast('Пункт удалён', 'info');
-                renderUI();
-            } catch (error) {
-                console.error('Ошибка удаления пункта:', error);
-                showToast('❌ Ошибка: ' + error.message, 'error');
-            }
-        };
-
-        // ----- ПРАВИЛА -----
-        window.openRulesEditor = async function() {
-            console.log('✏️ Открытие редактора правил');
-            const user = getCurrentUser();
-            if (!user || user.role !== 'admin') {
-                showToast('Только администратор может редактировать правила!', 'error');
-                return;
-            }
-            try {
-                const rules = await getRules();
-                document.getElementById('rulesEditorText').value = rules.join('\n');
-                document.getElementById('rulesEditorModal').classList.add('open');
-            } catch (error) {
-                console.error('Ошибка открытия редактора:', error);
-                showToast('❌ Ошибка: ' + error.message, 'error');
-            }
-        };
-
-        document.getElementById('rulesEditorForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            console.log('💾 Сохранение правил');
-            const user = getCurrentUser();
-            if (!user || user.role !== 'admin') {
-                showToast('Только администратор может редактировать правила!', 'error');
-                return;
-            }
-            try {
-                const text = document.getElementById('rulesEditorText').value;
-                const rules = text.split('\n').filter(line => line.trim() !== '');
-                if (rules.length === 0) {
-                    showToast('Введите хотя бы одно правило!', 'error');
-                    return;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
                 }
-                await setRules(rules);
-                document.getElementById('rulesEditorModal').classList.remove('open');
-                showToast('✅ Правила обновлены!', 'success');
-                renderUI();
-            } catch (error) {
-                console.error('Ошибка сохранения правил:', error);
-                showToast('❌ Ошибка: ' + error.message, 'error');
             }
-        });
-
-        // ============================================================
-        // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-        // ============================================================
-        async function getShopByOwner(username) {
-            const shops = await getShops();
-            return shops.find(s => s.owner === username && s.approved);
-        }
-
-        async function getPendingShops() {
-            const shops = await getShops();
-            return shops.filter(s => s.pending && !s.approved);
-        }
-
-        async function getProductsByShop(shopId) {
-            const products = await getProducts();
-            return products.filter(p => p.shop_id === shopId);
-        }
-
-        async function getProductById(id) {
-            const products = await getProducts();
-            return products.find(p => p.id === id);
-        }
-
-        async function getPendingProducts() {
-            const products = await getProducts();
-            return products.filter(p => p.status === 'pending');
-        }
-
-        async function getCartTotalAR() {
-            const user = getCurrentUser();
-            if (!user) return 0;
-            const cart = await getCart(user.username);
-            return cart.reduce((sum, item) => sum + (item.priceAR * item.quantity), 0);
-        }
-
-        async function getCartTotalDiamonds() { return (await getCartTotalAR()) * AR_TO_DIAMONDS; }
-
-        async function getCartItemCount() {
-            const user = getCurrentUser();
-            if (!user) return 0;
-            const cart = await getCart(user.username);
-            return cart.reduce((sum, item) => sum + item.quantity, 0);
-        }
-
-        // ============================================================
-        // ИЗБРАННОЕ
-        // ============================================================
-        window.toggleWishlist = async function(productId) {
-            const user = getCurrentUser();
-            if (!user) {
-                showToast('Войдите, чтобы добавлять в избранное', 'warning');
-                openLogin();
-                return;
-            }
-            let wishlist = await getWishlist(user.username);
-            const idx = wishlist.indexOf(productId);
-            if (idx === -1) {
-                wishlist.push(productId);
-                showToast('Добавлено в избранное ❤️', 'success');
-            } else {
-                wishlist.splice(idx, 1);
-                showToast('Удалено из избранного', 'info');
-            }
-            await setWishlist(user.username, wishlist);
-            renderUI();
         };
-
-        async function getWishlistProducts() {
-            const user = getCurrentUser();
-            if (!user) return [];
-            const wishlist = await getWishlist(user.username);
-            const products = await getProducts();
-            return products.filter(p => wishlist.includes(p.id) && p.status === 'approved');
-        }
 
         // ============================================================
         // КОРЗИНА
@@ -2498,7 +1747,8 @@
                 openLogin();
                 return;
             }
-            const product = await getProductById(productId);
+            const products = await getProducts();
+            const product = products.find(p => p.id === productId);
             if (!product || product.status !== 'approved') {
                 showToast('Товар не доступен для покупки', 'error');
                 return;
@@ -2547,7 +1797,8 @@
             let cart = await getCart(user.username);
             const item = cart.find(i => i.productId === productId);
             if (!item) return;
-            const product = await getProductById(productId);
+            const products = await getProducts();
+            const product = products.find(p => p.id === productId);
             if (!product) return;
             const newQty = item.quantity + delta;
             if (newQty <= 0) {
@@ -2562,9 +1813,6 @@
             renderUI();
         };
 
-        // ============================================================
-        // ОФОРМЛЕНИЕ ЗАКАЗА
-        // ============================================================
         window.openCheckout = async function() {
             const user = getCurrentUser();
             if (!user) {
@@ -2594,8 +1842,9 @@
         window.renderCheckoutSummary = async function() {
             const user = getCurrentUser();
             if (!user) return;
-            const totalAR = await getCartTotalAR();
-            const totalDiamonds = await getCartTotalDiamonds();
+            const cart = await getCart(user.username);
+            let totalAR = cart.reduce((sum, item) => sum + (item.priceAR * item.quantity), 0);
+            const totalDiamonds = totalAR * AR_TO_DIAMONDS;
             const paymentMethod = document.getElementById('checkoutPaymentMethod').value;
             let extra = '';
             if (paymentMethod === 'balance') {
@@ -2613,7 +1862,7 @@
                 <p style="font-weight:600;margin-bottom:8px;">Итого:</p>
                 <p>🟣 ${totalAR.toFixed(2)} АР</p>
                 <p>💎 ${totalDiamonds.toFixed(2)} алмазов</p>
-                <p style="font-size:12px;color:var(--text-secondary);margin-top:6px;">Товаров: ${await getCartItemCount()}</p>
+                <p style="font-size:12px;color:var(--text-secondary);margin-top:6px;">Товаров: ${cart.reduce((s, i) => s + i.quantity, 0)}</p>
                 ${extra}
             `;
         };
@@ -2661,126 +1910,168 @@
         });
 
         // ============================================================
-        // СТАТУС ЗАКАЗА
+        // ИЗБРАННОЕ
         // ============================================================
-        window.updateOrderStatus = async function(orderId, status, btnEl) {
-            const user = getCurrentUser();
-            if (!user || user.role !== 'seller') {
-                showToast('Только продавец может изменять статус заказа!', 'error');
-                return;
-            }
-            const btn = btnEl || (window.event && window.event.target && window.event.target.closest('button'));
-            const originalHtml = btn ? btn.innerHTML : null;
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Обновляем...';
-            }
-            try {
-                const result = await apiCall('updateOrderStatus', 'orders', { seller: user.username, status }, orderId);
-                if (!result || result.error) {
-                    throw new Error((result && result.error) || 'Не удалось обновить статус');
-                }
-                showToast('📦 Статус заказа обновлён: ' + status, 'success');
-                renderUI();
-            } catch (error) {
-                console.error('Ошибка обновления статуса заказа:', error);
-                showToast('❌ Ошибка: ' + error.message, 'error');
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = originalHtml;
-                }
-            }
-        };
-
-        // ============================================================
-        // ВЫДАЧА ЗАКАЗА СОТРУДНИКОМ ПВЗ (НОВОЕ)
-        // ============================================================
-        window.completeOrderByStaff = async function(orderId, btnEl) {
-            const user = getCurrentUser();
-            if (!user || user.role !== 'staff') {
-                showToast('Только сотрудник ПВЗ может выдавать заказы!', 'error');
-                return;
-            }
-            const btn = btnEl || (window.event && window.event.target && window.event.target.closest('button'));
-            const originalHtml = btn ? btn.innerHTML : null;
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Выдаём...';
-            }
-            try {
-                const result = await apiCall('updateOrderStatus', 'orders', { status: 'completed', actor: user.username }, orderId);
-                if (!result || result.error) {
-                    throw new Error((result && result.error) || 'Не удалось выдать заказ');
-                }
-                showToast('📦 Заказ выдан покупателю!', 'success');
-                renderUI();
-            } catch (error) {
-                showToast('❌ ' + error.message, 'error');
-                if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
-            }
-        };
-
-        // ============================================================
-        // ОТМЕНА ЗАКАЗА (15 МИНУТ)
-        // ============================================================
-        window.cancelOrder = async function(orderId) {
+        window.toggleWishlist = async function(productId) {
             const user = getCurrentUser();
             if (!user) {
-                showToast('Войдите в аккаунт!', 'warning');
+                showToast('Войдите, чтобы добавлять в избранное', 'warning');
+                openLogin();
                 return;
             }
-            if (!confirm('❓ Вы уверены, что хотите отменить заказ #' + orderId + '?\n\nТовары будут возвращены на склад.'))
+            let wishlist = await getWishlist(user.username);
+            const idx = wishlist.indexOf(productId);
+            if (idx === -1) {
+                wishlist.push(productId);
+                showToast('Добавлено в избранное ❤️', 'success');
+            } else {
+                wishlist.splice(idx, 1);
+                showToast('Удалено из избранного', 'info');
+            }
+            await setWishlist(user.username, wishlist);
+            renderUI();
+        };
+
+        // ============================================================
+        // ПУНКТЫ ВЫДАЧИ
+        // ============================================================
+        window.addPickupPoint = async function() {
+            const user = getCurrentUser();
+            if (!user || user.role !== 'admin') {
+                showToast('Только администратор может добавлять пункты выдачи!', 'error');
                 return;
+            }
+            const name = prompt('Введите название нового пункта выдачи:');
+            if (!name || name.trim() === '') return;
             try {
-                const result = await apiCall('cancelOrder', 'orders', { buyer: user.username }, orderId);
-                if (result.success) {
-                    showToast('✅ Заказ отменён! Товары возвращены на склад.', 'success');
-                    renderUI();
+                const points = await getPickupPoints();
+                if (points.includes(name.trim())) {
+                    showToast('Такой пункт уже существует!', 'warning');
+                    return;
                 }
+                points.push(name.trim());
+                await setPickupPoints(points);
+                showToast('Пункт "' + name.trim() + '" добавлен!', 'success');
+                renderUI();
             } catch (error) {
-                if (error.message.includes('15 минут')) {
-                    showToast('❌ ' + error.message, 'error');
-                } else {
-                    showToast('❌ ' + error.message, 'error');
-                }
+                console.error('Ошибка добавления пункта:', error);
+                showToast('❌ Ошибка: ' + error.message, 'error');
             }
         };
 
-        window.adminResetBalance = async function(username) {
+        window.removePickupPoint = async function(name) {
             const user = getCurrentUser();
             if (!user || user.role !== 'admin') {
-                showToast('Только администратор может обнулять баланс!', 'error');
+                showToast('Только администратор может удалять пункты выдачи!', 'error');
                 return;
             }
-            if (!confirm('❓ Обнулить баланс покупателя ' + username + '?'))
-                return;
+            if (!confirm('Удалить пункт "' + name + '"?')) return;
             try {
-                const result = await adminResetBalanceDB(username, user.username);
-                if (!result || result.error) throw new Error((result && result.error) || 'Ошибка обнуления баланса');
-                showToast('✅ Баланс покупателя ' + username + ' обнулён', 'success');
+                let points = await getPickupPoints();
+                points = points.filter(p => p !== name);
+                await setPickupPoints(points);
+                showToast('Пункт удалён', 'info');
                 renderUI();
             } catch (error) {
-                showToast('❌ ' + error.message, 'error');
+                console.error('Ошибка удаления пункта:', error);
+                showToast('❌ Ошибка: ' + error.message, 'error');
             }
         };
 
-        window.adminCancelOrder = async function(orderId) {
+        // ============================================================
+        // ПРАВИЛА
+        // ============================================================
+        window.openRulesEditor = async function() {
             const user = getCurrentUser();
             if (!user || user.role !== 'admin') {
-                showToast('Только администратор может отменять заказы так!', 'error');
+                showToast('Только администратор может редактировать правила!', 'error');
                 return;
             }
-            if (!confirm('❓ Отменить заказ #' + orderId + ' из-за технических неполадок?\n\nТовары будут возвращены на склад, а деньги (если оплачено с баланса) — покупателю.'))
-                return;
             try {
-                const result = await adminCancelOrderDB(orderId, user.username);
-                if (!result || result.error) throw new Error((result && result.error) || 'Ошибка отмены заказа');
-                showToast('✅ Заказ #' + orderId + ' отменён из-за технических неполадок', 'success');
-                renderUI();
+                const rules = await getRules();
+                document.getElementById('rulesEditorText').value = rules.join('\n');
+                document.getElementById('rulesEditorModal').classList.add('open');
             } catch (error) {
-                showToast('❌ ' + error.message, 'error');
+                console.error('Ошибка открытия редактора:', error);
+                showToast('❌ Ошибка: ' + error.message, 'error');
             }
         };
+
+        document.getElementById('rulesEditorForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const user = getCurrentUser();
+            if (!user || user.role !== 'admin') {
+                showToast('Только администратор может редактировать правила!', 'error');
+                return;
+            }
+            try {
+                const text = document.getElementById('rulesEditorText').value;
+                const rules = text.split('\n').filter(line => line.trim() !== '');
+                if (rules.length === 0) {
+                    showToast('Введите хотя бы одно правило!', 'error');
+                    return;
+                }
+                await setRules(rules);
+                document.getElementById('rulesEditorModal').classList.remove('open');
+                showToast('✅ Правила обновлены!', 'success');
+                renderUI();
+            } catch (error) {
+                console.error('Ошибка сохранения правил:', error);
+                showToast('❌ Ошибка: ' + error.message, 'error');
+            }
+        });
+
+        // ============================================================
+        // ВСПОМОГАТЕЛЬНЫЕ
+        // ============================================================
+        async function getShopByOwner(username) {
+            const shops = await getShops();
+            return shops.find(s => s.owner === username && s.approved);
+        }
+
+        async function getPendingShops() {
+            const shops = await getShops();
+            return shops.filter(s => s.pending && !s.approved);
+        }
+
+        async function getProductsByShop(shopId) {
+            const products = await getProducts();
+            return products.filter(p => p.shop_id === shopId);
+        }
+
+        async function getProductById(id) {
+            const products = await getProducts();
+            return products.find(p => p.id === id);
+        }
+
+        async function getPendingProducts() {
+            const products = await getProducts();
+            return products.filter(p => p.status === 'pending');
+        }
+
+        async function getCartTotalAR() {
+            const user = getCurrentUser();
+            if (!user) return 0;
+            const cart = await getCart(user.username);
+            return cart.reduce((sum, item) => sum + (item.priceAR * item.quantity), 0);
+        }
+
+        async function getCartTotalDiamonds() { return (await getCartTotalAR()) * AR_TO_DIAMONDS; }
+
+        async function getCartItemCount() {
+            const user = getCurrentUser();
+            if (!user) return 0;
+            const cart = await getCart(user.username);
+            return cart.reduce((sum, item) => sum + item.quantity, 0);
+        }
+
+        async function getWishlistProducts() {
+            const user = getCurrentUser();
+            if (!user) return [];
+            const wishlist = await getWishlist(user.username);
+            const products = await getProducts();
+            return products.filter(p => wishlist.includes(p.id) && p.status === 'approved');
+        }
 
         // ============================================================
         // RENDER
@@ -2793,15 +2084,17 @@
             const balanceBadge = document.getElementById('balanceBadge');
             const balanceAmount = document.getElementById('balanceAmount');
             const navWalletBtn = document.getElementById('navWalletBtn');
+            const navCourierBtn = document.getElementById('navCourierBtn');
 
             if (user) {
                 const isBlocked = await isUserBlocked(user.username);
-                const roleEmoji = user.role === 'admin' ? '👑' : user.role === 'staff' ? '📮' : user.role === 'seller' ? '🏪' : '🛒';
+                const roleEmoji = user.role === 'admin' ? '👑' : user.role === 'staff' ? '📮' : user.role === 'courier' ? '🚚' : user.role === 'seller' ? '🏪' : '🛒';
                 userNameEl.textContent = user.username + ' ' + roleEmoji + (isBlocked ? ' 🔒' : '');
                 authBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i> Выйти';
                 authBtn.className = 'btn btn-danger btn-sm';
                 authBtn.onclick = logout;
                 navWalletBtn.style.display = '';
+                navCourierBtn.style.display = user.role === 'courier' ? '' : 'none';
                 balanceBadge.style.display = 'inline-flex';
                 balanceAmount.textContent = (await getBalanceFor(user.username)).toFixed(2);
             } else {
@@ -2810,6 +2103,7 @@
                 authBtn.className = 'btn btn-primary btn-sm';
                 authBtn.onclick = openLogin;
                 navWalletBtn.style.display = 'none';
+                navCourierBtn.style.display = 'none';
                 balanceBadge.style.display = 'none';
             }
 
@@ -2824,7 +2118,24 @@
             await renderRules();
             await renderFilters();
             await renderWallet();
+            await renderCourier();
+            if (user && user.role === 'admin') {
+                await renderAdminSessions();
+            }
         }
+
+        // ============================================================
+        // ФИЛЬТРЫ
+        // ============================================================
+        let currentCategoryFilter = 'all';
+
+        window.filterByCategory = function(category) {
+            currentCategoryFilter = category;
+            document.querySelectorAll('#filterTabs button').forEach(btn => {
+                btn.classList.toggle('active-filter', btn.dataset.category === category);
+            });
+            renderCatalog();
+        };
 
         async function renderFilters() {
             const container = document.getElementById('filterTabs');
@@ -2837,16 +2148,9 @@
             container.innerHTML = html;
         }
 
-        let currentCategoryFilter = 'all';
-
-        window.filterByCategory = function(category) {
-            currentCategoryFilter = category;
-            document.querySelectorAll('#filterTabs button').forEach(btn => {
-                btn.classList.toggle('active-filter', btn.dataset.category === category);
-            });
-            renderCatalog();
-        };
-
+        // ============================================================
+        // КАТАЛОГ
+        // ============================================================
         async function renderCatalog() {
             const grid = document.getElementById('catalogGrid');
             const searchQuery = document.getElementById('searchInput').value.toLowerCase().trim();
@@ -2930,6 +2234,9 @@
             grid.innerHTML = html;
         }
 
+        // ============================================================
+        // КОРЗИНА (RENDER)
+        // ============================================================
         async function renderCart() {
             const container = document.getElementById('cartContent');
             const user = getCurrentUser();
@@ -2951,7 +2258,8 @@
             let totalAR = 0;
 
             for (const item of cart) {
-                const product = await getProductById(item.productId);
+                const products = await getProducts();
+                const product = products.find(p => p.id === item.productId);
                 const stock = product ? product.stock : 0;
                 const subtotal = item.priceAR * item.quantity;
                 totalAR += subtotal;
@@ -2999,6 +2307,9 @@
             container.innerHTML = html;
         }
 
+        // ============================================================
+        // ИЗБРАННОЕ (RENDER)
+        // ============================================================
         async function renderWishlist() {
             const container = document.getElementById('wishlistGrid');
             const user = getCurrentUser();
@@ -3040,6 +2351,9 @@
             container.innerHTML = html;
         }
 
+        // ============================================================
+        // ПРАВИЛА (RENDER)
+        // ============================================================
         async function renderRules() {
             const container = document.getElementById('rulesList');
             const rules = await getRules();
@@ -3058,6 +2372,9 @@
             container.innerHTML = html;
         }
 
+        // ============================================================
+        // ПРОФИЛЬ (RENDER)
+        // ============================================================
         async function renderProfile() {
             const container = document.getElementById('profileContent');
             const user = getCurrentUser();
@@ -3084,10 +2401,11 @@
                 <div class="profile-grid">
                     <div class="profile-card">
                         <div class="card-title"><i class="fas fa-user"></i> ${user.username} ${isBlocked ? '🔒' : ''}</div>
-                        <p style="color:var(--text-secondary);">Роль: ${user.role === 'admin' ? '👑 Администратор' : user.role === 'seller' ? '🏪 Продавец' : '🛒 Покупатель'} ${isBlocked ? ' <span class="badge badge-danger">Заблокирован</span>' : ''}</p>
+                        <p style="color:var(--text-secondary);">Роль: ${user.role === 'admin' ? '👑 Администратор' : user.role === 'staff' ? '📮 Сотрудник ПВЗ' : user.role === 'courier' ? '🚚 Курьер' : user.role === 'seller' ? '🏪 Продавец' : '🛒 Покупатель'} ${isBlocked ? ' <span class="badge badge-danger">Заблокирован</span>' : ''}</p>
                     </div>
             `;
 
+            // ===== АДМИН =====
             if (user.role === 'admin') {
                 const allShops = await getShops();
                 const allUsers = await getUsers();
@@ -3098,6 +2416,8 @@
                 html += `
                     <div class="profile-card admin-panel">
                         <div class="card-title"><i class="fas fa-shield-alt"></i> Админ-панель</div>
+                        
+                        <!-- Заявки на магазины -->
                         <div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.15);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
                             <h4 style="font-size:15px;color:var(--warning);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-clock"></i> Заявки на магазины (${pendingShops.length})</h4>
                 `;
@@ -3127,6 +2447,8 @@
 
                 html += `
                         </div>
+                        
+                        <!-- Товары на проверку -->
                         <div style="background:rgba(6,182,212,0.05);border:1px solid rgba(6,182,212,0.15);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
                             <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-boxes"></i> Товары на проверку (${pendingProducts.length})</h4>
                 `;
@@ -3156,29 +2478,8 @@
 
                 html += `
                         </div>
-                        <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
-                            <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-cubes"></i> Все товары (${allProducts.length})</h4>
-                            <div style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;">
-                `;
-
-                if (allProducts.length === 0) {
-                    html += `<p style="color:var(--text-secondary);font-size:13px;">Нет товаров</p>`;
-                } else {
-                    for (const p of allProducts.slice().reverse()) {
-                        const statusLabel = p.status === 'approved' ? '✅' : p.status === 'pending' ? '⏳' : '❌';
-                        html += `
-                            <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 10px;background:rgba(255,255,255,0.02);border-radius:6px;flex-wrap:wrap;gap:4px;font-size:13px;">
-                                <span>${p.icon || '📦'} ${p.name}</span>
-                                <span style="color:var(--text-secondary);font-size:11px;">${p.seller} · ${statusLabel}</span>
-                                <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}', true)" style="font-size:10px;padding:2px 8px;"><i class="fas fa-trash"></i></button>
-                            </div>
-                        `;
-                    }
-                }
-
-                html += `
-                            </div>
-                        </div>
+                        
+                        <!-- Управление продавцами -->
                         <div style="background:rgba(34,197,94,0.03);border:1px solid rgba(34,197,94,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
                             <h4 style="font-size:15px;color:var(--success);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-store-alt"></i> Управление продавцами</h4>
                             <div style="display:flex;flex-direction:column;gap:6px;">
@@ -3192,10 +2493,11 @@
                         const productCount = allProducts.filter(p => p.seller === s.username).length;
                         html += `
                             <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:rgba(255,255,255,0.02);border-radius:8px;flex-wrap:wrap;gap:4px;">
-                                <span style="font-weight:500;">${s.username} <span style="color:var(--text-secondary);font-size:11px;">(${productCount} товаров)</span></span>
+                                <span style="font-weight:500;cursor:pointer;color:var(--accent);" onclick="viewSellerProfile('${s.username}')">${s.username} <span style="color:var(--text-secondary);font-size:11px;">(${productCount} товаров)</span></span>
                                 <span class="badge ${s.approved ? 'badge-success' : s.pending ? 'badge-warning' : 'badge-danger'}">${s.approved ? '✅ Одобрен' : s.pending ? '⏳ Ожидает' : '❌ Отклонён'}</span>
                                 ${s.approved ? `<button class="btn ${isBanned ? 'btn-success' : 'btn-danger'} btn-sm" onclick="toggleBlockUser('${s.username}')">${isBanned ? '🔓 Разблокировать' : '🔒 Заблокировать'}</button>` : ''}
                                 <button class="btn btn-danger btn-sm" onclick="deleteSeller('${s.username}')" style="background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.2);"><i class="fas fa-user-slash"></i> Удалить</button>
+                                <button class="btn btn-info btn-sm" onclick="viewSellerProfile('${s.username}')"><i class="fas fa-eye"></i> Профиль</button>
                             </div>
                         `;
                     }
@@ -3206,7 +2508,7 @@
                         </div>
                 `;
 
-                // ----- УПРАВЛЕНИЕ ПОКУПАТЕЛЯМИ (НОВОЕ) -----
+                // Управление покупателями
                 const buyers = allUsers.filter(u => u.role === 'buyer');
                 const allBalances = await getBalances();
                 const balanceMap = {};
@@ -3258,34 +2560,73 @@
                     </details>
                 `;
 
+                // Управление паролями
                 html += `
-                        <div style="background:rgba(251,191,36,0.03);border:1px solid rgba(251,191,36,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
-                            <h4 style="font-size:15px;color:var(--warning);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-gavel"></i> Правила</h4>
-                            <button class="btn btn-primary btn-sm" onclick="openRulesEditor()"><i class="fas fa-edit"></i> Редактировать правила</button>
-                        </div>
-                        <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;">
-                            <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-map-pin"></i> Пункты выдачи (${points.length})</h4>
-                            <div class="pickup-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-                                ${points.map(p => `<span class="tag">${p}<button class="del" onclick="removePickupPoint('${p}')">✕</button></span>`).join('')}
-                            </div>
-                            <button class="btn btn-primary btn-sm" onclick="addPickupPoint()"><i class="fas fa-plus"></i> Добавить</button>
-                        </div>
-                        <div style="background:rgba(124,58,237,0.03);border:1px solid rgba(124,58,237,0.1);border-radius:var(--radius-sm);padding:16px;margin-top:16px;">
-                            <h4 style="font-size:15px;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-coins"></i> Пополнить баланс игрока</h4>
-                            <form class="inline-form" onsubmit="return handleAdminTopUp(event)">
-                                <input type="text" id="adminTopUpUsername" placeholder="Логин игрока" required />
-                                <input type="number" id="adminTopUpAmount" placeholder="Сумма АР" min="0.01" step="0.01" required />
-                                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Пополнить</button>
-                            </form>
-                        </div>
-                        <details class="tx-log">
-                            <summary><i class="fas fa-receipt"></i> Лог всех транзакций (${(await getAllTransactions()).length})</summary>
-                            <div class="tx-list">${renderTransactionRows(await getAllTransactions())}</div>
-                        </details>
+                    <div style="background:rgba(124,58,237,0.03);border:1px solid rgba(124,58,237,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                        <h4 style="font-size:15px;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-key"></i> Управление паролями</h4>
+                        <button class="btn btn-primary btn-sm" onclick="openPasswordManager()"><i class="fas fa-edit"></i> Сменить пароль игроку</button>
                     </div>
                 `;
+
+                // Активные сессии
+                html += `
+                    <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                        <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-desktop"></i> Активные сессии</h4>
+                        <div id="adminSessionsContainer"></div>
+                    </div>
+                `;
+
+                // Правила
+                html += `
+                    <div style="background:rgba(251,191,36,0.03);border:1px solid rgba(251,191,36,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                        <h4 style="font-size:15px;color:var(--warning);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-gavel"></i> Правила</h4>
+                        <button class="btn btn-primary btn-sm" onclick="openRulesEditor()"><i class="fas fa-edit"></i> Редактировать правила</button>
+                    </div>
+                `;
+
+                // Пункты выдачи
+                html += `
+                    <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;">
+                        <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-map-pin"></i> Пункты выдачи (${points.length})</h4>
+                        <div class="pickup-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                            ${points.map(p => `<span class="tag">${p}<button class="del" onclick="removePickupPoint('${p}')">✕</button></span>`).join('')}
+                        </div>
+                        <button class="btn btn-primary btn-sm" onclick="addPickupPoint()"><i class="fas fa-plus"></i> Добавить</button>
+                    </div>
+                `;
+
+                // Пополнение баланса
+                html += `
+                    <div style="background:rgba(124,58,237,0.03);border:1px solid rgba(124,58,237,0.1);border-radius:var(--radius-sm);padding:16px;margin-top:16px;">
+                        <h4 style="font-size:15px;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-coins"></i> Пополнить баланс игрока</h4>
+                        <form class="inline-form" onsubmit="return handleAdminTopUp(event)">
+                            <input type="text" id="adminTopUpUsername" placeholder="Логин игрока" required />
+                            <input type="number" id="adminTopUpAmount" placeholder="Сумма АР" min="0.01" step="0.01" required />
+                            <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Пополнить</button>
+                        </form>
+                    </div>
+                `;
+
+                // Архив заказов
+                html += `
+                    <div style="background:rgba(34,197,94,0.03);border:1px solid rgba(34,197,94,0.1);border-radius:var(--radius-sm);padding:16px;margin-top:16px;">
+                        <h4 style="font-size:15px;color:var(--success);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-archive"></i> Архив заказов</h4>
+                        <button class="btn btn-primary btn-sm" onclick="openArchive()"><i class="fas fa-folder-open"></i> Открыть архив</button>
+                    </div>
+                `;
+
+                // Лог транзакций
+                html += `
+                    <details class="tx-log">
+                        <summary><i class="fas fa-receipt"></i> Лог всех транзакций (${(await getAllTransactions()).length})</summary>
+                        <div class="tx-list">${renderTransactionRows(await getAllTransactions())}</div>
+                    </details>
+                `;
+
+                html += `</div>`;
             }
 
+            // ===== ПРОДАВЕЦ =====
             if (user.role === 'seller') {
                 const pending = userData && userData.pending;
 
@@ -3361,6 +2702,7 @@
                 }
             }
 
+            // ===== ПОКУПАТЕЛЬ (заказы) =====
             if (buyerOrders.length > 0) {
                 const statusLabels = { 'pending': '⏳ Ожидает', 'processing': '🔄 В обработке', 'ready': '✅ Готов',
                     'completed': '📦 Выдан', 'cancelled': '❌ Отменён' };
@@ -3368,7 +2710,9 @@
                     'completed': 'badge-success', 'cancelled': 'badge-danger' };
 
                 html += `
-                    <div class="profile-card"><div class="card-title">📜 Мои заказы (${buyerOrders.length})</div><div style="display:flex;flex-direction:column;gap:10px;">
+                    <div class="profile-card"><div class="card-title">📜 Мои заказы (${buyerOrders.length})</div>
+                    <button class="btn btn-secondary btn-sm" onclick="openArchive()" style="margin-bottom:12px;"><i class="fas fa-archive"></i> Архив</button>
+                    <div style="display:flex;flex-direction:column;gap:10px;">
                 `;
 
                 for (const o of buyerOrders.slice().reverse()) {
@@ -3412,13 +2756,144 @@
             }
 
             if (user.role === 'buyer' && buyerOrders.length === 0) {
-                html +=
-                    `<div class="profile-card"><div class="card-title">🛒 Покупатель</div><p>Добро пожаловать в WildCraft Market!</p><button class="btn btn-primary" onclick="switchPage('catalog')">В каталог</button></div>`;
+                html += `
+                    <div class="profile-card"><div class="card-title">🛒 Покупатель</div>
+                    <p>Добро пожаловать в WildCraft Market!</p>
+                    <button class="btn btn-secondary btn-sm" onclick="openArchive()" style="margin-top:8px;"><i class="fas fa-archive"></i> Архив заказов</button>
+                    <button class="btn btn-primary" onclick="switchPage('catalog')" style="margin-top:8px;">В каталог</button>
+                    </div>
+                `;
             }
 
             html += '</div>';
             container.innerHTML = html;
         }
+
+        // ============================================================
+        // КОШЕЛЁК (RENDER)
+        // ============================================================
+        async function renderWallet() {
+            const container = document.getElementById('walletContent');
+            const user = getCurrentUser();
+            if (!user) {
+                container.innerHTML =
+                    `<div class="empty-state"><i class="fas fa-wallet"></i><h3>Войдите в аккаунт</h3><button class="btn btn-primary" onclick="openLogin()">Войти</button></div>`;
+                return;
+            }
+
+            const balance = await getBalanceFor(user.username);
+            const myTx = await getTransactionsFor(user.username);
+
+            let html = `
+                <div class="wallet-hero">
+                    <div class="label">Баланс</div>
+                    <div class="amount text-gradient">🟣 ${balance.toFixed(2)} АР</div>
+                    <div class="label">≈ ${(balance * AR_TO_DIAMONDS).toFixed(2)} алмазов</div>
+                </div>
+            `;
+
+            if (user.role === 'staff' || user.role === 'admin') {
+                const orders = await getOrders();
+                const readyOrders = orders.filter(o => o.status === 'ready');
+                html += `
+                    <div class="wallet-grid">
+                        <div class="profile-card">
+                            <div class="card-title"><i class="fas fa-coins"></i> Пополнить баланс игрока</div>
+                            <p style="color:var(--text-secondary);font-size:13px;">Выдача денег наличными/предметами на ПВЗ — отразите её здесь</p>
+                            <form class="inline-form" onsubmit="return handleAdminTopUp(event)">
+                                <input type="text" id="adminTopUpUsername" placeholder="Логин игрока" required />
+                                <input type="number" id="adminTopUpAmount" placeholder="Сумма АР" min="0.01" step="0.01" required />
+                                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Пополнить</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="profile-card">
+                        <div class="card-title"><i class="fas fa-box-open"></i> Заказы, готовые к выдаче (${readyOrders.length})</div>
+                `;
+                if (readyOrders.length === 0) {
+                    html += `<p style="color:var(--text-secondary);font-size:14px;">Нет заказов, ожидающих выдачи</p>`;
+                } else {
+                    for (const o of readyOrders.slice().reverse()) {
+                        html += `
+                            <div class="staff-order-item">
+                                <div class="header flex-between"><span class="id">#${o.id}</span><span class="date">${new Date(o.created_at).toLocaleString()}</span></div>
+                                <div>👤 Покупатель: <strong>${o.buyer}</strong> · 🏪 Продавец: ${o.seller}</div>
+                                <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
+                                <div>📍 ${o.pickup} · ${o.payment_method === 'balance' ? '💳 Оплачен с баланса' : '💵 Оплата при получении: ' + o.total_ar.toFixed(2) + ' АР'}</div>
+                                <div style="margin-top:8px;">
+                                    <button class="btn btn-success btn-sm" onclick="completeOrderByStaff('${o.id}', this)"><i class="fas fa-hand-holding"></i> Выдать заказ</button>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+                html += `</div>`;
+            } else {
+                html += `
+                    <div class="wallet-grid">
+                        <div class="profile-card">
+                            <div class="card-title"><i class="fas fa-paper-plane"></i> Перевести другому игроку</div>
+                            <form class="inline-form" onsubmit="return handleTransfer(event)">
+                                <input type="text" id="transferTo" placeholder="Логин получателя" required />
+                                <input type="number" id="transferAmount" placeholder="Сумма АР" min="0.01" step="0.01" max="${balance}" required />
+                                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-paper-plane"></i> Перевести</button>
+                            </form>
+                        </div>
+                `;
+                if (user.role === 'seller') {
+                    const points = await getPickupPoints();
+                    html += `
+                        <div class="profile-card">
+                            <div class="card-title"><i class="fas fa-hand-holding-usd"></i> Вывести средства через ПВЗ</div>
+                            <form class="inline-form" onsubmit="return handleWithdraw(event)">
+                                <select id="withdrawPickup" required>${points.map(p => `<option value="${p}">${p}</option>`).join('')}</select>
+                                <input type="number" id="withdrawAmount" placeholder="Сумма АР" min="0.01" step="0.01" max="${balance}" required />
+                                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-hand-holding-usd"></i> Вывести</button>
+                            </form>
+                        </div>
+                    `;
+                }
+                html += `</div>`;
+            }
+
+            html += `
+                <details class="tx-log" open>
+                    <summary><i class="fas fa-receipt"></i> История операций (${myTx.length})</summary>
+                    <div class="tx-list">${renderTransactionRows(myTx.slice().reverse())}</div>
+                </details>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        // ============================================================
+        // ВЫДАЧА ЗАКАЗА СОТРУДНИКОМ ПВЗ
+        // ============================================================
+        window.completeOrderByStaff = async function(orderId, btnEl) {
+            const user = getCurrentUser();
+            if (!user || (user.role !== 'staff' && user.role !== 'admin')) {
+                showToast('Только сотрудник ПВЗ может выдавать заказы!', 'error');
+                return;
+            }
+            const btn = btnEl || (window.event && window.event.target && window.event.target.closest('button'));
+            const originalHtml = btn ? btn.innerHTML : null;
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Выдаём...';
+            }
+            try {
+                const result = await apiCall('updateOrderStatus', 'orders', { status: 'completed', actor: user.username }, orderId);
+                if (!result || result.error) {
+                    throw new Error((result && result.error) || 'Не удалось выдать заказ');
+                }
+                showToast('📦 Заказ выдан покупателю!', 'success');
+                renderUI();
+            } catch (error) {
+                showToast('❌ ' + error.message, 'error');
+                if (btn) { btn.disabled = false;
+                    btn.innerHTML = originalHtml; }
+            }
+        };
 
         // ============================================================
         // НАВИГАЦИЯ
@@ -3438,6 +2913,7 @@
             if (page === 'catalog') renderCatalog();
             if (page === 'rules') renderRules();
             if (page === 'wallet') renderWallet();
+            if (page === 'courier') renderCourier();
 
             window.scrollTo({ top: 0, behavior: 'smooth' });
         };
@@ -3457,15 +2933,8 @@
         });
 
         // ============================================================
-        // ДИНАМИЧЕСКАЯ ВЫСОТА ШАПКИ (ИСПРАВЛЕНО)
+        // ДИНАМИЧЕСКАЯ ВЫСОТА ШАПКИ
         // ============================================================
-        // Раньше отступ контента от фиксированной шапки был захардкожен
-        // (74px / 120px на мобильных). Если шапка переносилась на большее
-        // число строк, чем предполагалось (длинное имя пользователя,
-        // узкий экран, другой шрифт и т.п.), верх страницы — включая меню
-        // в профиле — уезжал под шапку и визуально пропадал при скролле.
-        // ResizeObserver следит за РЕАЛЬНОЙ высотой шапки и обновляет
-        // --header-height, поэтому это больше не может повториться.
         (function setupHeaderHeightSync() {
             const header = document.getElementById('header');
             if (!header) return;
@@ -3499,23 +2968,16 @@
                 await initData();
                 await renderUI();
                 console.log('⚡ WildCraft Market запущен!');
-                console.log('👑 Админ: Admin / 691311');
+                console.log('👑 Админ: Admin / Admin2026!');
+                console.log('📮 Сотрудник ПВЗ: staff / Staff2026!');
+                console.log('🚚 Курьер: courier / Courier2026!');
                 console.log('💎 1 АР = 3 алмаза');
                 console.log('🗄️ Данные хранятся в Vercel PostgreSQL (Neon)');
                 console.log('📋 Горячие клавиши: Ctrl+1(каталог) Ctrl+2(корзина) Ctrl+3(профиль) Ctrl+4(избранное) Ctrl+5(правила)');
             } catch (error) {
-                // ИСПРАВЛЕНО: раньше при сбое подключения к БД показывался
-                // только общий тост "Ошибка подключения к базе данных",
-                // который через 4 секунды исчезал, а РЕАЛЬНАЯ причина
-                // (например "POSTGRES_URL not configured") была видна
-                // только в консоли браузера. Теперь настоящая причина
-                // показывается прямо на странице, постоянно, с кнопкой
-                // "Повторить" — не нужно лезть в DevTools, чтобы понять,
-                // что именно сломалось.
                 console.error('Ошибка запуска:', error);
                 const realReason = error?.message || 'неизвестная ошибка';
                 showToast('❌ Не удалось подключиться к серверу: ' + realReason, 'error', 8000);
-
                 const main = document.querySelector('.main .container') || document.querySelector('.main');
                 if (main) {
                     main.innerHTML = `
