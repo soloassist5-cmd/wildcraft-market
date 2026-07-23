@@ -41,7 +41,7 @@ async function ensureSchema() {
         category TEXT NOT NULL,
         name TEXT NOT NULL,
         icon TEXT DEFAULT '📦',
-        price_ar NUMERIC NOT NULL,
+        price_ar INTEGER NOT NULL,
         stock INTEGER NOT NULL DEFAULT 0,
         seller TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
         status TEXT DEFAULT 'pending',
@@ -61,8 +61,8 @@ async function ensureSchema() {
         buyer TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
         seller TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
         items JSONB NOT NULL,
-        total_ar NUMERIC NOT NULL,
-        total_diamonds NUMERIC NOT NULL,
+        total_ar INTEGER NOT NULL,
+        total_diamonds INTEGER NOT NULL,
         currency TEXT NOT NULL,
         pickup TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'pending',
@@ -70,7 +70,6 @@ async function ensureSchema() {
         created_at TIMESTAMP DEFAULT NOW()
     )`);
 
-    // МИГРАЦИЯ: добавляем новые колонки
     await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier TEXT`);
     await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP`);
     await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
@@ -80,8 +79,8 @@ async function ensureSchema() {
         buyer TEXT NOT NULL,
         seller TEXT NOT NULL,
         items JSONB NOT NULL,
-        total_ar NUMERIC NOT NULL,
-        total_diamonds NUMERIC NOT NULL,
+        total_ar INTEGER NOT NULL,
+        total_diamonds INTEGER NOT NULL,
         currency TEXT NOT NULL,
         pickup TEXT NOT NULL,
         status TEXT NOT NULL,
@@ -112,14 +111,14 @@ async function ensureSchema() {
 
     await pool.query(`CREATE TABLE IF NOT EXISTS balances (
         username TEXT PRIMARY KEY REFERENCES users(username) ON DELETE CASCADE,
-        balance NUMERIC NOT NULL DEFAULT 0
+        balance INTEGER NOT NULL DEFAULT 0
     )`);
 
     await pool.query(`CREATE TABLE IF NOT EXISTS transactions (
         id SERIAL PRIMARY KEY,
         username TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
         type TEXT NOT NULL,
-        amount NUMERIC NOT NULL,
+        amount INTEGER NOT NULL,
         description TEXT,
         created_at TIMESTAMP NOT NULL DEFAULT NOW()
     )`);
@@ -566,9 +565,9 @@ export default async function handler(req, res) {
         // ===== ПОПОЛНЕНИЕ БАЛАНСА =====
         if (action === 'topUpBalance') {
             const { username, amount, actor } = data || {};
-            const amt = Number(amount);
+            const amt = Math.floor(Number(amount));
             if (!username || !actor || !amt || amt <= 0) {
-                return res.status(400).json({ error: 'username, amount и actor обязательны, amount должен быть положительным' });
+                return res.status(400).json({ error: 'username, amount и actor обязательны, amount должен быть положительным целым' });
             }
             const actorRes = await pool.query('SELECT role FROM users WHERE username = $1', [actor]);
             const actorRole = actorRes.rows[0]?.role;
@@ -597,9 +596,9 @@ export default async function handler(req, res) {
         // ===== ПЕРЕВОД =====
         if (action === 'transferBalance') {
             const { from, to, amount } = data || {};
-            const amt = Number(amount);
+            const amt = Math.floor(Number(amount));
             if (!from || !to || !amt || amt <= 0) {
-                return res.status(400).json({ error: 'from, to и amount обязательны, amount должен быть положительным' });
+                return res.status(400).json({ error: 'from, to и amount обязательны, amount должен быть положительным целым' });
             }
             if (from === to) {
                 return res.status(400).json({ error: 'Нельзя перевести деньги самому себе' });
@@ -634,9 +633,9 @@ export default async function handler(req, res) {
         // ===== ВЫВОД СРЕДСТВ =====
         if (action === 'withdrawBalance') {
             const { username, amount, pickup } = data || {};
-            const amt = Number(amount);
+            const amt = Math.floor(Number(amount));
             if (!username || !amt || amt <= 0) {
-                return res.status(400).json({ error: 'username и amount обязательны, amount должен быть положительным' });
+                return res.status(400).json({ error: 'username и amount обязательны, amount должен быть положительным целым' });
             }
             const client = await pool.connect();
             try {
@@ -951,4 +950,4 @@ export default async function handler(req, res) {
             detail: error.detail,
         });
     }
-}
+                }
