@@ -7,11 +7,9 @@ const pool = new Pool({
     connectionTimeoutMillis: 2000,
 });
 
-// Находит ВСЕ таблицы/столбцы, у которых есть FOREIGN KEY на
-// referencedTable.referencedColumn, и удаляет из них строки с данным
-// значением. Это подстраховка на случай таблиц, о которых мы не знаем
-// заранее (reviews, messages, notifications и т.п.) — вместо того чтобы
-// вручную перечислять каждую зависимую таблицу и рисковать что-то забыть.
+// ============================================================
+// ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ КАСКАДНОГО УДАЛЕНИЯ
+// ============================================================
 async function deleteAllReferencingRows(client, referencedTable, referencedColumn, value) {
     const { rows } = await client.query(
         `SELECT tc.table_name AS referencing_table, kcu.column_name AS referencing_column
@@ -32,7 +30,9 @@ async function deleteAllReferencingRows(client, referencedTable, referencedColum
     for (const row of rows) {
         const sql = `DELETE FROM "${row.referencing_table}" WHERE "${row.referencing_column}" = $1`;
         const result = await client.query(sql, [value]);
-        console.log(`✅ Автоочистка: ${result.rowCount} строк из "${row.referencing_table}".${row.referencing_column} для ${referencedTable}.${referencedColumn}=${value}`);
+        if (result.rowCount > 0) {
+            console.log(`✅ Автоочистка: ${result.rowCount} строк из "${row.referencing_table}".${row.referencing_column}`);
+        }
     }
 }
 
@@ -62,7 +62,7 @@ export default async function handler(req, res) {
 
         // ===== GET ALL =====
         if (action === 'getAll') {
-            const [users, shops, products, carts, orders, pickupPoints, bannedUsers, rules, wishlist] = await Promise.all([
+            const [users, shops, products, carts, orders, pickupPoints, bannedUsers, rules, wishlist, balances, transactions] = await Promise.all([
                 pool.query('SELECT * FROM users'),
                 pool.query('SELECT * FROM shops'),
                 pool.query('SELECT * FROM products'),
@@ -72,6 +72,8 @@ export default async function handler(req, res) {
                 pool.query('SELECT * FROM banned_users'),
                 pool.query('SELECT * FROM rules'),
                 pool.query('SELECT * FROM wishlist'),
+                pool.query('SELECT * FROM balances'),
+                pool.query('SELECT * FROM transactions ORDER BY created_at DESC LIMIT 100'),
             ]);
             return res.status(200).json({
                 users: users.rows,
@@ -83,6 +85,8 @@ export default async function handler(req, res) {
                 bannedUsers: bannedUsers.rows.map(b => b.username),
                 rules: rules.rows.map(r => r.rule_text),
                 wishlist: wishlist.rows,
+                balances: balances.rows,
+                transactions: transactions.rows,
             });
         }
 
@@ -101,6 +105,31 @@ export default async function handler(req, res) {
                              pending = EXCLUDED.pending,
                              blocked = EXCLUDED.blocked`,
                         [user.username, user.password, user.role, user.shop_id || null, user.approved || false, user.pending || false, user.blocked || false]
+                    );
+                    // При создании пользователя создаём баланс
+                    if (!user.blocked) {
+                        await pool.query(
+                            `INSERT INTO balances (username, balance) VALUES ($1, 0) ON CONFLICT (username) DO NOTHING`,
+                            [user.username]
+                        );
+                    }
+                }
+            }
+            if (table === 'balances') {
+                for (const bal of data) {
+                    await pool.query(
+                        `INSERT INTO balances (username, balance) VALUES ($1, $2)
+                         ON CONFLICT (username) DO UPDATE SET balance = EXCLUDED.balance`,
+                        [bal.username, bal.balance]
+                    );
+                }
+            }
+            if (table === 'transactions') {
+                for (const tr of data) {
+                    await pool.query(
+                        `INSERT INTO transactions (id, username, type, amount, description, created_at)
+                         VALUES ($1, $2, $3, $4, $5, NOW())`,
+                        [tr.id, tr.username, tr.type, tr.amount, tr.description]
                     );
                 }
             }
@@ -148,8 +177,7 @@ export default async function handler(req, res) {
                     await pool.query(
                         `INSERT INTO carts (user_id, items)
                          VALUES ($1, $2)
-                         ON CONFLICT (user_id) DO UPDATE SET
-                             items = EXCLUDED.items`,
+                         ON CONFLICT (user_id) DO UPDATE SET items = EXCLUDED.items`,
                         [cart.user_id, JSON.stringify(cart.items)]
                     );
                 }
@@ -157,8 +185,8 @@ export default async function handler(req, res) {
             if (table === 'orders') {
                 for (const order of data) {
                     await pool.query(
-                        `INSERT INTO orders (id, buyer, seller, items, total_ar, total_diamonds, currency, pickup, status, created_at)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+                        `INSERT INTO orders (id, buyer, seller, items, total_ar, total_diamonds, currency, pickup, status, payment_method, created_at)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
                          ON CONFLICT (id) DO UPDATE SET
                              buyer = EXCLUDED.buyer,
                              seller = EXCLUDED.seller,
@@ -167,8 +195,9 @@ export default async function handler(req, res) {
                              total_diamonds = EXCLUDED.total_diamonds,
                              currency = EXCLUDED.currency,
                              pickup = EXCLUDED.pickup,
-                             status = EXCLUDED.status`,
-                        [order.id, order.buyer, order.seller, JSON.stringify(order.items), order.total_ar, order.total_diamonds, order.currency, order.pickup, order.status || 'pending']
+                             status = EXCLUDED.status,
+                             payment_method = EXCLUDED.payment_method`,
+                        [order.id, order.buyer, order.seller, JSON.stringify(order.items), order.total_ar, order.total_diamonds, order.currency, order.pickup, order.status || 'pending', order.payment_method || 'balance']
                     );
                 }
             }
@@ -199,7 +228,7 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // ===== DELETE (ИСПРАВЛЕНО — УДАЛЯЕТ ИЗ ИЗБРАННОГО) =====
+        // ===== DELETE =====
         if (action === 'delete') {
             console.log('🗑️ DELETE запрос:', table, id);
 
@@ -207,18 +236,12 @@ export default async function handler(req, res) {
                 const client = await pool.connect();
                 try {
                     await client.query('BEGIN');
-                    // Явно чистим wishlist (знаем про эту связь точно)...
                     await client.query('DELETE FROM wishlist WHERE product_id = $1', [id]);
-                    // ...и на всякий случай подчищаем ЛЮБЫЕ другие таблицы,
-                    // у которых есть FK на products.id (например reviews,
-                    // order_items и т.п., о которых мы можем не знать).
                     await deleteAllReferencingRows(client, 'products', 'id', id);
-                    const deleted = await client.query('DELETE FROM products WHERE id = $1 RETURNING id', [id]);
-                    console.log('✅ Товар удалён:', id, '| затронуто строк:', deleted.rowCount);
+                    await client.query('DELETE FROM products WHERE id = $1', [id]);
                     await client.query('COMMIT');
                 } catch (err) {
                     await client.query('ROLLBACK');
-                    console.error('❌ Ошибка удаления товара, откат транзакции:', err);
                     throw err;
                 } finally {
                     client.release();
@@ -229,67 +252,57 @@ export default async function handler(req, res) {
                 await pool.query('DELETE FROM shops WHERE id = $1', [id]);
             }
 
-            // ===== КАСКАДНОЕ УДАЛЕНИЕ ПРОДАВЦА (ИСПРАВЛЕНО) =====
-            // Удаляет пользователя вместе со всеми зависимыми записями внутри
-            // одной транзакции, чтобы не нарушать foreign key constraints
-            // и не оставлять "осиротевшие" данные при ошибке на середине.
+            // ===== КАСКАДНОЕ УДАЛЕНИЕ ПРОДАВЦА (С АНУЛИРОВАНИЕМ БАЛАНСА) =====
             if (table === 'users') {
                 const client = await pool.connect();
                 try {
                     await client.query('BEGIN');
 
-                    // 1. Забираем id всех товаров продавца заранее
+                    // 1. Получаем товары продавца
                     const productIds = (await client.query(
                         'SELECT id FROM products WHERE seller = $1', [id]
                     )).rows.map(r => r.id);
 
-                    // 2. Для каждого товара чистим wishlist и ЛЮБЫЕ другие
-                    //    таблицы, ссылающиеся на products.id (reviews и т.п.)
+                    // 2. Чистим wishlist и другие таблицы для каждого товара
                     for (const pid of productIds) {
                         await client.query('DELETE FROM wishlist WHERE product_id = $1', [pid]);
                         await deleteAllReferencingRows(client, 'products', 'id', pid);
                     }
 
-                    // 3. Сами товары продавца
-                    const deletedProducts = await client.query(
-                        'DELETE FROM products WHERE seller = $1 RETURNING id',
-                        [id]
-                    );
-                    console.log('✅ [users] удалено товаров:', deletedProducts.rowCount);
+                    // 3. Удаляем товары продавца
+                    await client.query('DELETE FROM products WHERE seller = $1', [id]);
 
-                    // 4. Корзины и wishlist самого пользователя
+                    // 4. Корзины и wishlist пользователя
                     await client.query('DELETE FROM carts WHERE user_id = $1', [id]);
                     await client.query('DELETE FROM wishlist WHERE user_id = $1', [id]);
 
-                    // 5. Заказы, где пользователь выступает продавцом
-                    const deletedOrders = await client.query(
-                        'DELETE FROM orders WHERE seller = $1 RETURNING id',
-                        [id]
-                    );
-                    console.log('✅ [users] удалено заказов (как продавец):', deletedOrders.rowCount);
+                    // 5. Заказы
+                    await client.query('DELETE FROM orders WHERE seller = $1', [id]);
+                    await client.query('DELETE FROM orders WHERE buyer = $1', [id]);
 
-                    // 6. Магазин пользователя
+                    // 6. Магазин
                     await client.query('DELETE FROM shops WHERE owner = $1', [id]);
-                    console.log('✅ [users] магазин продавца удалён:', id);
 
-                    // 7. Запись из списка заблокированных
+                    // 7. Запись из banned_users
                     await client.query('DELETE FROM banned_users WHERE username = $1', [id]);
 
-                    // 8. Финальная зачистка: ЛЮБЫЕ другие таблицы, ссылающиеся
-                    //    на users.username, о которых мы могли не знать
-                    //    (reviews, messages, notifications, orders.buyer и т.д.)
+                    // 8. АНУЛИРУЕМ БАЛАНС (удаляем)
+                    await client.query('DELETE FROM balances WHERE username = $1', [id]);
+
+                    // 9. Удаляем транзакции пользователя
+                    await client.query('DELETE FROM transactions WHERE username = $1', [id]);
+
+                    // 10. Финальная зачистка
                     await deleteAllReferencingRows(client, 'users', 'username', id);
 
-                    // 9. И наконец — сам пользователь
-                    const deletedUser = await client.query(
-                        'DELETE FROM users WHERE username = $1 RETURNING username', [id]
-                    );
-                    console.log('✅ [users] пользователь удалён:', id, '| затронуто строк:', deletedUser.rowCount);
+                    // 11. Удаляем самого пользователя
+                    await client.query('DELETE FROM users WHERE username = $1', [id]);
 
                     await client.query('COMMIT');
+                    console.log('✅ Пользователь и баланс удалены:', id);
                 } catch (err) {
                     await client.query('ROLLBACK');
-                    console.error('❌ Ошибка каскадного удаления продавца, откат транзакции:', err);
+                    console.error('❌ Ошибка удаления:', err);
                     throw err;
                 } finally {
                     client.release();
@@ -301,6 +314,213 @@ export default async function handler(req, res) {
             }
             
             return res.status(200).json({ success: true });
+        }
+
+        // ============================================================
+        // НОВЫЕ ACTION ДЛЯ БАЛАНСА
+        // ============================================================
+
+        // ===== ПОПОЛНЕНИЕ БАЛАНСА (СОТРУДНИК ПВЗ) =====
+        if (action === 'depositBalance') {
+            const { username, amount, description, staffName } = data;
+            if (!username || !amount || amount <= 0) {
+                return res.status(400).json({ error: 'Укажите пользователя и сумму' });
+            }
+
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+
+                // Проверяем, что пользователь существует
+                const userCheck = await client.query('SELECT username FROM users WHERE username = $1', [username]);
+                if (userCheck.rowCount === 0) {
+                    return res.status(404).json({ error: 'Пользователь не найден' });
+                }
+
+                // Обновляем баланс
+                const result = await client.query(
+                    `INSERT INTO balances (username, balance) VALUES ($1, $2)
+                     ON CONFLICT (username) DO UPDATE SET balance = balances.balance + EXCLUDED.balance
+                     RETURNING balance`,
+                    [username, amount]
+                );
+
+                // Создаём транзакцию
+                const trId = 'tr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                await client.query(
+                    `INSERT INTO transactions (id, username, type, amount, description, created_at)
+                     VALUES ($1, $2, 'deposit', $3, $4, NOW())`,
+                    [trId, username, amount, description || `Пополнение через ПВЗ${staffName ? ' (сотрудник: ' + staffName + ')' : ''}`]
+                );
+
+                await client.query('COMMIT');
+                return res.status(200).json({ 
+                    success: true, 
+                    newBalance: result.rows[0].balance,
+                    transactionId: trId
+                });
+            } catch (err) {
+                await client.query('ROLLBACK');
+                throw err;
+            } finally {
+                client.release();
+            }
+        }
+
+        // ===== ВЫВОД СРЕДСТВ (ДЛЯ ПРОДАВЦОВ ЧЕРЕЗ ПВЗ) =====
+        if (action === 'withdrawBalance') {
+            const { username, amount, description } = data;
+            if (!username || !amount || amount <= 0) {
+                return res.status(400).json({ error: 'Укажите пользователя и сумму' });
+            }
+
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+
+                // Проверяем баланс
+                const balanceCheck = await client.query(
+                    'SELECT balance FROM balances WHERE username = $1',
+                    [username]
+                );
+                if (balanceCheck.rowCount === 0 || balanceCheck.rows[0].balance < amount) {
+                    return res.status(400).json({ error: 'Недостаточно средств на балансе' });
+                }
+
+                // Обновляем баланс
+                const result = await client.query(
+                    `UPDATE balances SET balance = balance - $1 WHERE username = $2 RETURNING balance`,
+                    [amount, username]
+                );
+
+                // Создаём транзакцию
+                const trId = 'tr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                await client.query(
+                    `INSERT INTO transactions (id, username, type, amount, description, created_at)
+                     VALUES ($1, $2, 'withdraw', $3, $4, NOW())`,
+                    [trId, username, amount, description || 'Вывод средств через ПВЗ']
+                );
+
+                await client.query('COMMIT');
+                return res.status(200).json({ 
+                    success: true, 
+                    newBalance: result.rows[0].balance,
+                    transactionId: trId
+                });
+            } catch (err) {
+                await client.query('ROLLBACK');
+                throw err;
+            } finally {
+                client.release();
+            }
+        }
+
+        // ===== ПЕРЕВОД МЕЖДУ ПОЛЬЗОВАТЕЛЯМИ =====
+        if (action === 'transferBalance') {
+            const { fromUser, toUser, amount, description } = data;
+            if (!fromUser || !toUser || !amount || amount <= 0) {
+                return res.status(400).json({ error: 'Укажите отправителя, получателя и сумму' });
+            }
+            if (fromUser === toUser) {
+                return res.status(400).json({ error: 'Нельзя перевести самому себе' });
+            }
+
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+
+                // Проверяем, что оба пользователя существуют
+                const usersCheck = await client.query(
+                    'SELECT username FROM users WHERE username IN ($1, $2)',
+                    [fromUser, toUser]
+                );
+                if (usersCheck.rowCount < 2) {
+                    return res.status(404).json({ error: 'Один из пользователей не найден' });
+                }
+
+                // Проверяем баланс отправителя
+                const balanceCheck = await client.query(
+                    'SELECT balance FROM balances WHERE username = $1',
+                    [fromUser]
+                );
+                if (balanceCheck.rowCount === 0 || balanceCheck.rows[0].balance < amount) {
+                    return res.status(400).json({ error: 'Недостаточно средств на балансе' });
+                }
+
+                // Списываем с отправителя
+                await client.query(
+                    `UPDATE balances SET balance = balance - $1 WHERE username = $2`,
+                    [amount, fromUser]
+                );
+
+                // Зачисляем получателю
+                await client.query(
+                    `INSERT INTO balances (username, balance) VALUES ($1, $2)
+                     ON CONFLICT (username) DO UPDATE SET balance = balances.balance + EXCLUDED.balance`,
+                    [toUser, amount]
+                );
+
+                // Транзакция для отправителя (списание)
+                const trId1 = 'tr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                await client.query(
+                    `INSERT INTO transactions (id, username, type, amount, description, created_at)
+                     VALUES ($1, $2, 'transfer_out', $3, $4, NOW())`,
+                    [trId1, fromUser, amount, `Перевод пользователю ${toUser}${description ? ' (' + description + ')' : ''}`]
+                );
+
+                // Транзакция для получателя (зачисление)
+                const trId2 = 'tr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                await client.query(
+                    `INSERT INTO transactions (id, username, type, amount, description, created_at)
+                     VALUES ($1, $2, 'transfer_in', $3, $4, NOW())`,
+                    [trId2, toUser, amount, `Перевод от пользователя ${fromUser}${description ? ' (' + description + ')' : ''}`]
+                );
+
+                // Получаем новый баланс отправителя
+                const newBalanceResult = await client.query(
+                    'SELECT balance FROM balances WHERE username = $1',
+                    [fromUser]
+                );
+
+                await client.query('COMMIT');
+                return res.status(200).json({ 
+                    success: true, 
+                    newBalance: newBalanceResult.rows[0]?.balance || 0
+                });
+            } catch (err) {
+                await client.query('ROLLBACK');
+                throw err;
+            } finally {
+                client.release();
+            }
+        }
+
+        // ===== ПОЛУЧЕНИЕ БАЛАНСА ПОЛЬЗОВАТЕЛЯ =====
+        if (action === 'getBalance') {
+            const result = await pool.query(
+                'SELECT balance FROM balances WHERE username = $1',
+                [id]
+            );
+            return res.status(200).json({ 
+                balance: result.rowCount > 0 ? result.rows[0].balance : 0 
+            });
+        }
+
+        // ===== ПОЛУЧЕНИЕ ТРАНЗАКЦИЙ ПОЛЬЗОВАТЕЛЯ =====
+        if (action === 'getTransactions') {
+            const result = await pool.query(
+                `SELECT * FROM transactions WHERE username = $1 ORDER BY created_at DESC LIMIT 50`,
+                [id]
+            );
+            return res.status(200).json(result.rows);
+        }
+
+        // ===== ПОЛУЧЕНИЕ ВСЕХ ТРАНЗАКЦИЙ (ДЛЯ АДМИНА) =====
+        if (action === 'getAllTransactions') {
+            const result = await pool.query(
+                'SELECT * FROM transactions ORDER BY created_at DESC LIMIT 200'
+            );
+            return res.status(200).json(result.rows);
         }
 
         // ===== ОТМЕНА ЗАКАЗА =====
@@ -342,6 +562,23 @@ export default async function handler(req, res) {
                 [orderId]
             );
             
+            // Если оплачено с баланса — возвращаем деньги
+            if (order.payment_method === 'balance') {
+                const amount = order.currency === 'AR' ? order.total_ar : order.total_diamonds;
+                await pool.query(
+                    `INSERT INTO balances (username, balance) VALUES ($1, $2)
+                     ON CONFLICT (username) DO UPDATE SET balance = balances.balance + EXCLUDED.balance`,
+                    [buyer, amount]
+                );
+                // Записываем транзакцию возврата
+                const trId = 'tr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                await pool.query(
+                    `INSERT INTO transactions (id, username, type, amount, description, created_at)
+                     VALUES ($1, $2, 'refund', $3, $4, NOW())`,
+                    [trId, buyer, amount, 'Возврат средств за отменённый заказ #' + orderId]
+                );
+            }
+            
             const items = order.items;
             for (const item of items) {
                 await pool.query(
@@ -356,13 +593,7 @@ export default async function handler(req, res) {
             });
         }
 
-        // ===== СМЕНА СТАТУСА ЗАКАЗА (ИСПРАВЛЕНО) =====
-        // Раньше смена статуса ОДНОГО заказа делалась через action:'set',
-        // который перезаливает ВООБЩЕ ВСЕ заказы маркетплейса построчно
-        // (по одному запросу на каждый заказ). Чем больше заказов в базе,
-        // тем дольше "висит" кнопка — на большом магазине это могло идти
-        // секундами и упираться в таймаут serverless-функции. Теперь это
-        // один точечный UPDATE по id.
+        // ===== СМЕНА СТАТУСА ЗАКАЗА =====
         if (action === 'updateOrderStatus') {
             const orderId = id;
             const seller = data?.seller;
@@ -409,4 +640,4 @@ export default async function handler(req, res) {
             detail: error.detail,
         });
     }
-                        }
+}
