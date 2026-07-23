@@ -67,11 +67,13 @@ async function ensureSchema() {
         pickup TEXT NOT NULL,
         status TEXT NOT NULL DEFAULT 'pending',
         payment_method TEXT DEFAULT 'cash',
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW(),
-        courier TEXT,
-        delivered_at TIMESTAMP
+        created_at TIMESTAMP DEFAULT NOW()
     )`);
+
+    // МИГРАЦИЯ: добавляем новые колонки
+    await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS courier TEXT`);
+    await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP`);
+    await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
 
     await pool.query(`CREATE TABLE IF NOT EXISTS orders_archive (
         id TEXT PRIMARY KEY,
@@ -132,6 +134,7 @@ async function ensureSchema() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_buyer ON orders(buyer)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_seller ON orders(seller)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_courier ON orders(courier)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_products_seller ON products(seller)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_products_status ON products(status)`);
@@ -375,7 +378,7 @@ export default async function handler(req, res) {
             return res.status(200).json({ grouped, total: result.rows.length });
         }
 
-        // ===== ОБНОВЛЕНИЕ СТАТУСА ЗАКАЗА (ИСПРАВЛЕНО) =====
+        // ===== ОБНОВЛЕНИЕ СТАТУСА ЗАКАЗА =====
         if (action === 'updateOrderStatus') {
             const orderId = id;
             const { actor, status } = data || {};
@@ -392,7 +395,6 @@ export default async function handler(req, res) {
             try {
                 await client.query('BEGIN');
                 
-                // Проверяем существование заказа
                 const orderRes = await client.query('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [orderId]);
                 if (orderRes.rows.length === 0) {
                     await client.query('ROLLBACK');
@@ -400,7 +402,6 @@ export default async function handler(req, res) {
                 }
                 const order = orderRes.rows[0];
 
-                // Проверяем роль актора
                 const actorRes = await client.query('SELECT role FROM users WHERE username = $1', [actor]);
                 if (actorRes.rows.length === 0) {
                     await client.query('ROLLBACK');
@@ -408,7 +409,6 @@ export default async function handler(req, res) {
                 }
                 const actorRole = actorRes.rows[0].role;
 
-                // ===== ЛОГИКА ПЕРЕХОДОВ ПО СТАТУСАМ =====
                 switch (status) {
                     case 'processing':
                         if (order.seller !== actor) {
@@ -441,11 +441,7 @@ export default async function handler(req, res) {
                             await client.query('ROLLBACK');
                             return res.status(400).json({ error: 'Заказ должен быть готов к передаче курьеру' });
                         }
-                        // Назначаем курьера — ОТДЕЛЬНЫЙ UPDATE
-                        await client.query(
-                            'UPDATE orders SET courier = $1 WHERE id = $2',
-                            [actor, orderId]
-                        );
+                        await client.query('UPDATE orders SET courier = $1 WHERE id = $2', [actor, orderId]);
                         break;
 
                     case 'ready_for_pickup':
@@ -461,7 +457,6 @@ export default async function handler(req, res) {
                             await client.query('ROLLBACK');
                             return res.status(400).json({ error: 'Заказ должен быть в пути' });
                         }
-                        // Начисляем комиссию курьеру (1 АР за доставку)
                         await adjustBalance(client, actor, 1);
                         await logTransaction(client, actor, 'delivery_fee', 1, `Доставка заказа #${orderId} на ПВЗ ${order.pickup}`);
                         break;
@@ -525,7 +520,6 @@ export default async function handler(req, res) {
                         break;
                 }
 
-                // ОБНОВЛЯЕМ СТАТУС (отдельный UPDATE)
                 await client.query(
                     `UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2`,
                     [status, orderId]
@@ -957,4 +951,4 @@ export default async function handler(req, res) {
             detail: error.detail,
         });
     }
-                    }
+}
