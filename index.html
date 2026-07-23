@@ -285,6 +285,7 @@
                 <button data-page="wishlist"><i class="fas fa-heart"></i> Избранное</button>
                 <button data-page="rules"><i class="fas fa-gavel"></i> Правила</button>
                 <button data-page="courier" id="navCourierBtn" style="display:none;"><i class="fas fa-truck"></i> Доставка</button>
+                <button data-page="courier_deliveries" id="navCourierDeliveriesBtn" style="display:none;"><i class="fas fa-truck-fast"></i> Мои доставки</button>
                 <button data-page="staff" id="navStaffBtn" style="display:none;"><i class="fas fa-warehouse"></i> ПВЗ</button>
             </nav>
             <div class="nav-right">
@@ -408,7 +409,21 @@
                     <div class="empty-state">
                         <i class="fas fa-truck"></i>
                         <h3>Нет заказов для доставки</h3>
-                        <p>Все заказы уже в пути или доставлены</p>
+                        <p>Все заказы уже в пути или доставлены в ПВЗ</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="page" id="page-courier_deliveries">
+                <div class="page-header">
+                    <h1>🚚 Мои доставки</h1>
+                    <p>Заказы, которые вы везёте в ПВЗ</p>
+                </div>
+                <div id="courierDeliveriesContent">
+                    <div class="empty-state">
+                        <i class="fas fa-truck"></i>
+                        <h3>Нет активных доставок</h3>
+                        <p>Возьмите заказы в разделе "Доставка"</p>
                     </div>
                 </div>
             </section>
@@ -663,7 +678,6 @@
             'Другое': '📦'
         };
 
-        // Статусы заказов
         const ORDER_STATUSES = {
             'pending': { label: '⏳ Ожидает', color: 'badge-warning' },
             'processing': { label: '🔄 В обработке', color: 'badge-info' },
@@ -1164,7 +1178,6 @@
                 return;
             }
 
-            // БЕЗОПАСНОЕ ПОЛУЧЕНИЕ КНОПКИ
             let btn = null;
             
             if (btnEl && typeof btnEl === 'object' && btnEl.tagName === 'BUTTON') {
@@ -1206,7 +1219,7 @@
                     'processing': 'В обработке',
                     'ready_for_courier': 'Готов к передаче курьеру',
                     'in_transit': 'В пути',
-                    'ready_for_pickup': 'Готов к выдаче',
+                    'ready_for_pickup': 'Готов к выдаче в ПВЗ',
                     'completed': 'Выдан',
                     'cancelled': 'Отменён'
                 };
@@ -1719,7 +1732,7 @@
                         <div class="empty-state">
                             <i class="fas fa-truck"></i>
                             <h3>Нет заказов для доставки</h3>
-                            <p>Все заказы уже в пути или доставлены</p>
+                            <p>Все заказы уже в пути или доставлены в ПВЗ</p>
                         </div>
                     `;
                     return;
@@ -1750,6 +1763,63 @@
                 console.error('Ошибка загрузки заказов для курьера:', error);
                 container.innerHTML =
                     `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>Ошибка загрузки</h3><p>${error.message}</p></div>`;
+            }
+        }
+
+        // ============================================================
+        // МОИ ДОСТАВКИ (КУРЬЕР)
+        // ============================================================
+        async function renderCourierDeliveries() {
+            const container = document.getElementById('courierDeliveriesContent');
+            const user = getCurrentUser();
+            if (!user || user.role !== 'courier') {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fas fa-truck"></i>
+                        <h3>Только для курьеров</h3>
+                    </div>
+                `;
+                return;
+            }
+            try {
+                const orders = await getOrders();
+                const myOrders = orders.filter(o => o.courier === user.username && o.status === 'in_transit');
+                
+                if (myOrders.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <i class="fas fa-truck"></i>
+                            <h3>Нет активных доставок</h3>
+                            <p>Возьмите заказы в разделе "Доставка"</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let html = `<p style="color:var(--text-secondary);margin-bottom:16px;">🚚 Заказов в пути: ${myOrders.length}</p>`;
+                for (const o of myOrders) {
+                    html += `
+                        <div class="courier-order-group">
+                            <div class="pickup-title">📍 Пункт выдачи: ${o.pickup}</div>
+                            <div class="courier-order-item">
+                                <div>
+                                    <div><strong>#${o.id}</strong> · 👤 ${o.buyer} → 🏪 ${o.seller}</div>
+                                    <div style="font-size:12px;color:var(--text-secondary);">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
+                                    <div style="font-size:12px;color:var(--text-secondary);">💰 ${o.total_ar.toFixed(2)} АР · ${o.payment_method === 'balance' ? '💳 Оплачено' : '💵 При получении'}</div>
+                                    <div style="font-size:12px;color:var(--success);"><i class="fas fa-check-circle"></i> Заказ в пути</div>
+                                </div>
+                                <button class="btn btn-success btn-sm" onclick="window.updateOrderStatus('${o.id}', 'ready_for_pickup', this)">
+                                    <i class="fas fa-warehouse"></i> Доставлен в ПВЗ
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+                container.innerHTML = html;
+            } catch (error) {
+                console.error('Ошибка загрузки доставок:', error);
+                container.innerHTML =
+                    `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>Ошибка</h3><p>${error.message}</p></div>`;
             }
         }
 
@@ -2369,6 +2439,7 @@
             const balanceAmount = document.getElementById('balanceAmount');
             const navWalletBtn = document.getElementById('navWalletBtn');
             const navCourierBtn = document.getElementById('navCourierBtn');
+            const navCourierDeliveriesBtn = document.getElementById('navCourierDeliveriesBtn');
             const navStaffBtn = document.getElementById('navStaffBtn');
 
             if (user) {
@@ -2381,6 +2452,7 @@
                 authBtn.onclick = logout;
                 navWalletBtn.style.display = '';
                 navCourierBtn.style.display = user.role === 'courier' ? '' : 'none';
+                navCourierDeliveriesBtn.style.display = user.role === 'courier' ? '' : 'none';
                 navStaffBtn.style.display = (user.role === 'staff' || user.role === 'admin') ? '' : 'none';
                 balanceBadge.style.display = 'inline-flex';
                 balanceAmount.textContent = (await getBalanceFor(user.username)).toFixed(2);
@@ -2391,6 +2463,7 @@
                 authBtn.onclick = openLogin;
                 navWalletBtn.style.display = 'none';
                 navCourierBtn.style.display = 'none';
+                navCourierDeliveriesBtn.style.display = 'none';
                 navStaffBtn.style.display = 'none';
                 balanceBadge.style.display = 'none';
             }
@@ -2407,6 +2480,7 @@
             await renderFilters();
             await renderWallet();
             await renderCourier();
+            await renderCourierDeliveries();
             await renderStaff();
             if (user && user.role === 'admin') {
                 await renderAdminSessions();
@@ -2525,7 +2599,6 @@
 
             grid.innerHTML = html;
 
-            // Обработчики для избранного
             grid.querySelectorAll('.wishlist-btn').forEach(btn => {
                 btn.addEventListener('click', function(e) {
                     e.preventDefault();
@@ -3084,6 +3157,7 @@
                                         ${canSendToCourier ? `<button class="btn btn-warning btn-sm" onclick="window.updateOrderStatus('${o.id}', 'ready_for_courier', this)"><i class="fas fa-truck"></i> Передать курьеру</button>` : ''}
                                         ${o.status === 'ready_for_courier' ? `<span style="font-size:12px;color:var(--text-secondary);"><i class="fas fa-clock"></i> Ожидает курьера</span>` : ''}
                                         ${o.status === 'in_transit' ? `<span style="font-size:12px;color:var(--secondary);"><i class="fas fa-truck"></i> В пути (курьер: ${o.courier || 'не назначен'})</span>` : ''}
+                                        ${o.status === 'ready_for_pickup' ? `<span style="font-size:12px;color:var(--success);"><i class="fas fa-warehouse"></i> Доставлен в ПВЗ (${o.pickup})</span>` : ''}
                                     </div>
                                 </div>
                             `;
@@ -3277,6 +3351,7 @@
             if (page === 'rules') renderRules();
             if (page === 'wallet') renderWallet();
             if (page === 'courier') renderCourier();
+            if (page === 'courier_deliveries') renderCourierDeliveries();
             if (page === 'staff') renderStaff();
 
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -3359,4 +3434,4 @@
         })();
     </script>
 </body>
-</html>
+    </html>
