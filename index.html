@@ -31,9 +31,6 @@
             --radius-sm: 10px;
             --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
             --transition: cubic-bezier(0.4, 0, 0.2, 1);
-            /* Реальная высота шапки меряется в JS (syncHeaderHeight) —
-               так контент никогда не прячется под header, даже если он
-               переносится на 2-3 строки на маленьких экранах. */
             --header-height: 74px;
         }
         body {
@@ -84,11 +81,6 @@
         .badge-warning {
             background: rgba(245, 158, 11, 0.15);
             color: var(--warning);
-            animation: badgePulse 2.2s ease-in-out infinite;
-        }
-        @keyframes badgePulse {
-            0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.35); }
-            50% { box-shadow: 0 0 0 5px rgba(245, 158, 11, 0); }
         }
         .badge-danger {
             background: rgba(239, 68, 68, 0.15);
@@ -1018,6 +1010,78 @@
                 padding: 16px;
             }
         }
+
+        /* Дополнительные стили для баланса и ПВЗ */
+        .balance-display {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(6, 182, 212, 0.1);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--secondary);
+        }
+        .balance-display i {
+            font-size: 14px;
+        }
+        .transaction-log {
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 13px;
+        }
+        .transaction-log .tr-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .transaction-log .tr-item .type-deposit {
+            color: var(--success);
+        }
+        .transaction-log .tr-item .type-withdraw {
+            color: var(--danger);
+        }
+        .transaction-log .tr-item .type-transfer_in {
+            color: var(--secondary);
+        }
+        .transaction-log .tr-item .type-transfer_out {
+            color: var(--warning);
+        }
+        .transaction-log .tr-item .type-refund {
+            color: var(--success);
+        }
+        .collapsible-header {
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .collapsible-header:hover {
+            opacity: 0.8;
+        }
+        .collapsible-content {
+            display: none;
+            margin-top: 8px;
+        }
+        .collapsible-content.open {
+            display: block;
+        }
+        .pzv-panel {
+            background: rgba(6, 182, 212, 0.05);
+            border: 1px solid rgba(6, 182, 212, 0.15);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            margin-top: 12px;
+        }
+        .pzv-panel .btn {
+            font-size: 12px;
+            padding: 6px 14px;
+        }
     </style>
 </head>
 <body>
@@ -1259,7 +1323,15 @@
                         <option value="diamonds">Алмазы (1 АР = 3 алмаза)</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label>Метод оплаты</label>
+                    <select id="checkoutPaymentMethod" required>
+                        <option value="balance">С баланса</option>
+                        <option value="pickup">При получении (на ПВЗ)</option>
+                    </select>
+                </div>
                 <div id="checkoutSummary" style="background:rgba(255,255,255,0.04);padding:16px;border-radius:var(--radius-sm);margin-bottom:16px;"></div>
+                <div id="balanceInfo" style="background:rgba(34,197,94,0.05);padding:12px;border-radius:var(--radius-sm);margin-bottom:12px;font-size:13px;display:none;"></div>
                 <button type="submit" class="btn btn-primary btn-block">Подтвердить заказ</button>
             </form>
         </div>
@@ -1278,6 +1350,36 @@
                 </div>
                 <button type="submit" class="btn btn-primary btn-block">💾 Сохранить правила</button>
             </form>
+        </div>
+    </div>
+
+    <!-- Модалка для ПВЗ (сотрудники) -->
+    <div class="modal-overlay" id="pzvModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>🏪 Пункт выдачи заказов (ПВЗ)</h2>
+                <button class="close" onclick="document.getElementById('pzvModal').classList.remove('open')">&times;</button>
+            </div>
+            <div id="pzvContent">
+                <div class="pzv-panel">
+                    <h4 style="margin-bottom:12px;color:var(--secondary);">📦 Заказы к выдаче</h4>
+                    <div id="pzvOrdersList" style="max-height:300px;overflow-y:auto;margin-bottom:12px;">
+                        <div class="empty-state" style="padding:20px;">
+                            <i class="fas fa-box-open"></i>
+                            <p>Нет заказов для выдачи</p>
+                        </div>
+                    </div>
+                    <h4 style="margin-bottom:12px;color:var(--secondary);">💰 Пополнение баланса</h4>
+                    <form id="pzvDepositForm" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                        <input type="text" id="pzvUsername" placeholder="Логин игрока" style="flex:1;min-width:120px;padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;" />
+                        <input type="number" id="pzvAmount" placeholder="Сумма (АР)" style="min-width:100px;padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);color:var(--text-primary);font-size:13px;" />
+                        <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-plus"></i> Пополнить</button>
+                    </form>
+                    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+                        <button class="btn btn-secondary btn-sm" onclick="pzvRefresh()"><i class="fas fa-sync"></i> Обновить</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1307,10 +1409,6 @@
         // ============================================================
         const apiCache = new Map();
 
-        // Полностью сбрасывает кэш GET-запросов. Нужно вызывать после ЛЮБОЙ
-        // мутации (set/delete), иначе следующий getX() в течение 30 секунд
-        // вернёт старые данные из кэша — визуально будет казаться, что
-        // удаление "не сработало", хотя на сервере всё уже удалено.
         function clearApiCache() { apiCache.clear(); }
 
         async function apiCall(action, table, data = null, id = null) {
@@ -1339,10 +1437,6 @@
                 if (action === 'get') {
                     apiCache.set(cacheKey, { data: result, time: Date.now() });
                 } else {
-                    // Любая мутация (set/delete/cancelOrder) может сделать
-                    // ранее закэшированные GET-ответы устаревшими —
-                    // безопаснее сбросить кэш целиком, чем гадать, какие
-                    // ключи задеты.
                     clearApiCache();
                 }
                 return result;
@@ -1420,6 +1514,209 @@
         }
 
         function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+        // ============================================================
+        // БАЛАНС И ТРАНЗАКЦИИ
+        // ============================================================
+        async function getUserBalance(username) {
+            const result = await apiCall('getBalance', 'balances', null, username);
+            return result?.balance || 0;
+        }
+
+        async function getTransactions(username) {
+            const result = await apiCall('getTransactions', 'transactions', null, username);
+            return result || [];
+        }
+
+        async function getAllTransactions() {
+            const result = await apiCall('getAllTransactions', 'transactions');
+            return result || [];
+        }
+
+        window.depositBalance = async function() {
+            const user = getCurrentUser();
+            if (!user || user.role !== 'admin') {
+                showToast('Только администратор может пополнять баланс!', 'error');
+                return;
+            }
+            const username = prompt('Введите логин пользователя:');
+            if (!username) return;
+            const amount = parseFloat(prompt('Введите сумму пополнения (АР):'));
+            if (!amount || amount <= 0) { showToast('Некорректная сумма!', 'error'); return; }
+            const description = prompt('Описание операции (необязательно):') || 'Пополнение через ПВЗ';
+            
+            try {
+                const result = await apiCall('depositBalance', 'balances', { 
+                    username, amount, description, 
+                    staffName: user.username 
+                });
+                if (result.success) {
+                    showToast(`✅ Баланс пользователя ${username} пополнен на ${amount} АР!`, 'success');
+                    renderUI();
+                }
+            } catch (error) {
+                showToast('❌ Ошибка: ' + error.message, 'error');
+            }
+        };
+
+        window.withdrawBalance = async function() {
+            const user = getCurrentUser();
+            if (!user || user.role !== 'seller') {
+                showToast('Только продавцы могут выводить средства!', 'error');
+                return;
+            }
+            const amount = parseFloat(prompt('Введите сумму для вывода (АР):'));
+            if (!amount || amount <= 0) { showToast('Некорректная сумма!', 'error'); return; }
+            const description = prompt('Описание (необязательно):') || 'Вывод средств через ПВЗ';
+            
+            try {
+                const result = await apiCall('withdrawBalance', 'balances', { 
+                    username: user.username, 
+                    amount,
+                    description
+                });
+                if (result.success) {
+                    showToast(`✅ Вывод ${amount} АР оформлен! Обратитесь в ПВЗ для получения.`, 'success');
+                    renderUI();
+                }
+            } catch (error) {
+                showToast('❌ Ошибка: ' + error.message, 'error');
+            }
+        };
+
+        window.transferBalance = async function() {
+            const user = getCurrentUser();
+            if (!user) {
+                showToast('Войдите в аккаунт!', 'error');
+                return;
+            }
+            const toUser = prompt('Введите логин получателя:');
+            if (!toUser) return;
+            const amount = parseFloat(prompt('Введите сумму перевода (АР):'));
+            if (!amount || amount <= 0) { showToast('Некорректная сумма!', 'error'); return; }
+            const description = prompt('Описание перевода (необязательно):') || '';
+            
+            try {
+                const result = await apiCall('transferBalance', 'balances', { 
+                    fromUser: user.username, 
+                    toUser, 
+                    amount,
+                    description
+                });
+                if (result.success) {
+                    showToast(`✅ Перевод ${amount} АР пользователю ${toUser} выполнен!`, 'success');
+                    renderUI();
+                }
+            } catch (error) {
+                showToast('❌ Ошибка: ' + error.message, 'error');
+            }
+        };
+
+        // ============================================================
+        // ПВЗ (Пункт выдачи заказов)
+        // ============================================================
+        window.openPZV = async function() {
+            const user = getCurrentUser();
+            if (!user) {
+                showToast('Войдите в аккаунт!', 'error');
+                return;
+            }
+            document.getElementById('pzvModal').classList.add('open');
+            await pzvRefresh();
+        };
+
+        async function pzvRefresh() {
+            const orders = await getOrders();
+            const readyOrders = orders.filter(o => o.status === 'ready' || o.status === 'completed');
+            
+            const container = document.getElementById('pzvOrdersList');
+            if (readyOrders.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state" style="padding:20px;">
+                        <i class="fas fa-box-open"></i>
+                        <p>Нет заказов для выдачи</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            readyOrders.forEach(o => {
+                const statusLabel = o.status === 'ready' ? '✅ Готов к выдаче' : '📦 Выдан';
+                html += `
+                    <div class="order-item" style="margin-bottom:8px;padding:12px;">
+                        <div class="header">
+                            <span class="id">#${o.id}</span>
+                            <span class="date">${new Date(o.created_at).toLocaleString()}</span>
+                        </div>
+                        <div class="buyer">👤 ${o.buyer} → 🏪 ${o.seller}</div>
+                        <div class="items">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
+                        <div class="pickup">📍 ${o.pickup}</div>
+                        <div class="flex-between" style="margin-top:4px;">
+                            <span class="total">${o.currency === 'AR' ? '🟣' : '💎'} ${o.currency === 'AR' ? o.total_ar.toFixed(2) + ' АР' : o.total_diamonds.toFixed(2) + ' алм'}</span>
+                            <span style="font-size:12px;color:var(--text-secondary);">
+                                Оплата: ${o.payment_method === 'balance' ? '💳 С баланса' : '📦 При получении'}
+                            </span>
+                            <span class="badge badge-success">${statusLabel}</span>
+                        </div>
+                        ${o.status === 'ready' ? `
+                            <div style="margin-top:6px;">
+                                <button class="btn btn-primary btn-sm" onclick="pzvCompleteOrder('${o.id}')">
+                                    <i class="fas fa-check"></i> Выдать заказ
+                                </button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        window.pzvCompleteOrder = async function(orderId) {
+            if (!confirm('Выдать заказ #' + orderId + ' покупателю?')) return;
+            try {
+                const orders = await getOrders();
+                const order = orders.find(o => o.id === orderId);
+                if (!order) { showToast('Заказ не найден', 'error'); return; }
+                order.status = 'completed';
+                await setOrders(orders);
+                showToast('✅ Заказ #' + orderId + ' выдан!', 'success');
+                await pzvRefresh();
+                renderUI();
+            } catch (error) {
+                showToast('❌ Ошибка: ' + error.message, 'error');
+            }
+        };
+
+        document.getElementById('pzvDepositForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const user = getCurrentUser();
+            if (!user) {
+                showToast('Войдите в аккаунт!', 'error');
+                return;
+            }
+            const username = document.getElementById('pzvUsername').value.trim();
+            const amount = parseFloat(document.getElementById('pzvAmount').value);
+            if (!username) { showToast('Введите логин!', 'error'); return; }
+            if (!amount || amount <= 0) { showToast('Введите сумму!', 'error'); return; }
+            
+            try {
+                const result = await apiCall('depositBalance', 'balances', { 
+                    username, amount, 
+                    description: 'Пополнение через ПВЗ (сотрудник: ' + user.username + ')',
+                    staffName: user.username
+                });
+                if (result.success) {
+                    showToast(`✅ Баланс ${username} пополнен на ${amount} АР!`, 'success');
+                    document.getElementById('pzvUsername').value = '';
+                    document.getElementById('pzvAmount').value = '';
+                    await pzvRefresh();
+                    renderUI();
+                }
+            } catch (error) {
+                showToast('❌ Ошибка: ' + error.message, 'error');
+            }
+        });
 
         // ============================================================
         // ТОСТЫ
@@ -1503,7 +1800,7 @@
         }
 
         // ============================================================
-        // АВТОРИЗАЦИЯ
+        // АВТОРИЗАЦИЯ (остальные функции такие же как в предыдущей версии)
         // ============================================================
         window.openLogin = function() {
             document.getElementById('loginModal').classList.add('open');
@@ -1659,7 +1956,7 @@
         });
 
         // ============================================================
-        // ТОВАРЫ (ДОБАВЛЕНИЕ ПРОДАВЦОМ)
+        // ТОВАРЫ
         // ============================================================
         document.getElementById('productForm').addEventListener('submit', async function(e) {
             e.preventDefault();
@@ -1734,7 +2031,6 @@
         // АДМИН-ПАНЕЛЬ
         // ============================================================
 
-        // ----- УДАЛЕНИЕ ПРОДАВЦА -----
         window.deleteSeller = async function(sellerUsername) {
             console.log('🗑️ Удаление продавца:', sellerUsername);
             const user = getCurrentUser();
@@ -1749,34 +2045,21 @@
             if (!confirm('🔴 УДАЛИТЬ ПРОДАВЦА: ' + sellerUsername + '?\n\n⚠️ ВСЕ данные будут БЕЗВОЗВРАТНО УДАЛЕНЫ!'))
             return;
             try {
-                const users = await getUsers();
-                const seller = users.find(u => u.username === sellerUsername);
-                if (!seller || seller.role !== 'seller') {
-                    showToast('Продавец не найден', 'error');
-                    return;
-                }
-                // Один запрос — сервер сам каскадно удаляет товары, wishlist,
-                // заказы, магазин и запись из banned_users внутри транзакции.
-                // Раньше здесь массивы фильтровались на клиенте и отправлялись
-                // через action:'set', который делает только upsert и НИЧЕГО
-                // не удаляет — поэтому кнопка визуально "не работала".
                 await deleteUserDB(sellerUsername);
                 clearApiCache();
                 showToast('🗑️ Продавец "' + sellerUsername + '" полностью удалён!', 'warning');
                 renderUI();
             } catch (error) {
-                console.error('Ошибка удаления продавца:', error, 'table:', error.table, 'constraint:', error.constraint, 'detail:', error.detail);
-                showToast('❌ Ошибка: ' + error.message + (error.detail ? ' (' + error.detail + ')' : ''), 'error');
+                console.error('Ошибка удаления продавца:', error);
+                showToast('❌ Ошибка: ' + error.message, 'error');
             }
         };
 
-        // ----- УДАЛЕНИЕ ТОВАРА (ИСПРАВЛЕНО) -----
         window.deleteProduct = async function(productId, fromAdmin = false) {
             console.log('🗑️ Удаление товара ID:', productId, 'fromAdmin:', fromAdmin);
             const user = getCurrentUser();
 
             if (!productId) {
-                console.error('❌ productId не передан!');
                 showToast('Ошибка: ID товара не найден', 'error');
                 return;
             }
@@ -1786,7 +2069,6 @@
                 const product = products.find(p => p.id === productId);
                 if (!product) {
                     showToast('Товар не найден', 'error');
-                    console.error('❌ Товар с ID', productId, 'не найден в базе');
                     return;
                 }
 
@@ -1796,8 +2078,6 @@
                         return;
                     }
                     if (!confirm('Удалить товар "' + product.name + '"?')) return;
-                    // Реальный DELETE вместо upsert-только 'set': сервер сам
-                    // чистит связанные записи в wishlist, затем удаляет товар.
                     await deleteProductDB(productId);
                     clearApiCache();
                     showToast('Товар "' + product.name + '" удалён', 'info');
@@ -1816,12 +2096,11 @@
                 showToast('🗑️ Товар "' + product.name + '" удалён администратором!', 'warning');
                 renderUI();
             } catch (error) {
-                console.error('Ошибка удаления товара:', error, 'table:', error.table, 'constraint:', error.constraint, 'detail:', error.detail);
-                showToast('❌ Ошибка: ' + error.message + (error.detail ? ' (' + error.detail + ')' : ''), 'error');
+                console.error('Ошибка удаления товара:', error);
+                showToast('❌ Ошибка: ' + error.message, 'error');
             }
         };
 
-        // ----- ОДОБРЕНИЕ МАГАЗИНА -----
         window.approveShop = async function(shopId, approve) {
             console.log('📝 Одобрение магазина:', shopId, approve);
             try {
@@ -1853,7 +2132,6 @@
             }
         };
 
-        // ----- ОДОБРЕНИЕ ТОВАРА -----
         window.approveProduct = async function(productId, approve) {
             console.log('📝 Одобрение товара:', productId, approve);
             try {
@@ -1875,7 +2153,6 @@
             }
         };
 
-        // ----- БЛОКИРОВКА -----
         window.toggleBlockUser = async function(username) {
             console.log('🔒 Блокировка пользователя:', username);
             const user = getCurrentUser();
@@ -1888,8 +2165,6 @@
                 const idx = banned.indexOf(username);
                 if (idx === -1) {
                     if (confirm('🔒 Заблокировать пользователя ' + username + '?\n\nВСЕ его товары будут УДАЛЕНЫ!')) {
-                        // ИСПРАВЛЕНО: setProducts делает только upsert и не может
-                        // удалить строки — нужно реально DELETE каждый товар.
                         const products = await getProducts();
                         const sellerProducts = products.filter(p => p.seller === username);
                         for (const p of sellerProducts) {
@@ -1911,7 +2186,6 @@
             }
         };
 
-        // ----- ПУНКТЫ ВЫДАЧИ -----
         window.addPickupPoint = async function() {
             console.log('➕ Добавление пункта выдачи');
             const user = getCurrentUser();
@@ -1957,7 +2231,6 @@
             }
         };
 
-        // ----- ПРАВИЛА -----
         window.openRulesEditor = async function() {
             console.log('✏️ Открытие редактора правил');
             const user = getCurrentUser();
@@ -2150,7 +2423,7 @@
         };
 
         // ============================================================
-        // ОФОРМЛЕНИЕ ЗАКАЗА
+        // ОФОРМЛЕНИЕ ЗАКАЗА (С БАЛАНСОМ)
         // ============================================================
         window.openCheckout = async function() {
             const user = getCurrentUser();
@@ -2173,15 +2446,30 @@
                 opt.textContent = p;
                 select.appendChild(opt);
             });
+
             const totalAR = await getCartTotalAR();
             const totalDiamonds = await getCartTotalDiamonds();
-            document.getElementById('checkoutSummary').innerHTML =
-                `
+            const balance = await getUserBalance(user.username);
+
+            document.getElementById('checkoutSummary').innerHTML = `
                 <p style="font-weight:600;margin-bottom:8px;">Итого:</p>
                 <p>🟣 ${totalAR.toFixed(2)} АР</p>
                 <p>💎 ${totalDiamonds.toFixed(2)} алмазов</p>
                 <p style="font-size:12px;color:var(--text-secondary);margin-top:6px;">Товаров: ${await getCartItemCount()}</p>
             `;
+
+            const balanceInfo = document.getElementById('balanceInfo');
+            if (balance > 0) {
+                balanceInfo.style.display = 'block';
+                balanceInfo.innerHTML = `
+                    <i class="fas fa-wallet" style="color:var(--secondary);"></i>
+                    Ваш баланс: <strong>${balance.toFixed(2)} АР</strong>
+                    ${balance >= totalAR ? ' ✅ Достаточно средств для оплаты с баланса' : ' ⚠️ Недостаточно средств, выберите "При получении"'}
+                `;
+            } else {
+                balanceInfo.style.display = 'none';
+            }
+
             document.getElementById('checkoutModal').classList.add('open');
         };
 
@@ -2195,11 +2483,31 @@
             }
             const pickup = document.getElementById('checkoutPickup').value;
             const currency = document.getElementById('checkoutCurrency').value;
+            const paymentMethod = document.getElementById('checkoutPaymentMethod').value;
             const cart = await getCart(user.username);
             if (cart.length === 0) {
                 showToast('Корзина пуста!', 'warning');
                 return;
             }
+
+            const totalAR = await getCartTotalAR();
+            const totalDiamonds = totalAR * AR_TO_DIAMONDS;
+
+            // Проверка баланса при оплате с баланса
+            if (paymentMethod === 'balance') {
+                const balance = await getUserBalance(user.username);
+                if (balance < totalAR) {
+                    showToast('❌ Недостаточно средств на балансе!', 'error');
+                    return;
+                }
+                // Списываем баланс
+                await apiCall('withdrawBalance', 'balances', {
+                    username: user.username,
+                    amount: totalAR,
+                    description: 'Оплата заказа'
+                });
+            }
+
             const orders = await getOrders();
             const products = await getProducts();
             const groupedBySeller = {};
@@ -2207,11 +2515,12 @@
                 if (!groupedBySeller[item.seller]) groupedBySeller[item.seller] = [];
                 groupedBySeller[item.seller].push(item);
             });
+
             for (const seller of Object.keys(groupedBySeller)) {
                 const items = groupedBySeller[seller];
                 const orderTotalAR = items.reduce((sum, it) => sum + (it.priceAR * it.quantity), 0);
                 const orderTotalDiamonds = orderTotalAR * AR_TO_DIAMONDS;
-                orders.push({
+                const order = {
                     id: 'ORD-' + generateId().toUpperCase(),
                     buyer: user.username,
                     seller: seller,
@@ -2227,10 +2536,13 @@
                     total_diamonds: orderTotalDiamonds,
                     currency: currency,
                     pickup: pickup,
+                    payment_method: paymentMethod,
                     status: 'pending'
-                });
+                };
+                orders.push(order);
             }
             await setOrders(orders);
+
             for (const item of cart) {
                 const p = products.find(pr => pr.id === item.productId);
                 if (p) { p.stock -= item.quantity;
@@ -2238,6 +2550,7 @@
             }
             await setProducts(products);
             await setCart(user.username, []);
+
             document.getElementById('checkoutModal').classList.remove('open');
             showToast('✅ Заказ оформлен!', 'success');
             renderUI();
@@ -2276,7 +2589,7 @@
         };
 
         // ============================================================
-        // ОТМЕНА ЗАКАЗА (15 МИНУТ)
+        // ОТМЕНА ЗАКАЗА
         // ============================================================
         window.cancelOrder = async function(orderId) {
             const user = getCurrentUser();
@@ -2313,7 +2626,12 @@
             if (user) {
                 const isBlocked = await isUserBlocked(user.username);
                 const roleEmoji = user.role === 'admin' ? '👑' : user.role === 'seller' ? '🏪' : '🛒';
-                userNameEl.textContent = user.username + ' ' + roleEmoji + (isBlocked ? ' 🔒' : '');
+                let balanceText = '';
+                try {
+                    const balance = await getUserBalance(user.username);
+                    balanceText = ` 💰 ${balance.toFixed(2)} АР`;
+                } catch (e) {}
+                userNameEl.textContent = user.username + ' ' + roleEmoji + (isBlocked ? ' 🔒' : '') + balanceText;
                 authBtn.innerHTML = '<i class="fas fa-sign-out-alt"></i> Выйти';
                 authBtn.className = 'btn btn-danger btn-sm';
                 authBtn.onclick = logout;
@@ -2589,15 +2907,67 @@
             const points = await getPickupPoints();
             const isBlocked = await isUserBlocked(user.username);
             const pendingProducts = await getPendingProducts();
+            const balance = await getUserBalance(user.username);
+            const transactions = await getTransactions(user.username);
+            const allTransactions = user.role === 'admin' ? await getAllTransactions() : [];
 
             let html = `
                 <div class="profile-grid">
                     <div class="profile-card">
                         <div class="card-title"><i class="fas fa-user"></i> ${user.username} ${isBlocked ? '🔒' : ''}</div>
-                        <p style="color:var(--text-secondary);">Роль: ${user.role === 'admin' ? '👑 Администратор' : user.role === 'seller' ? '🏪 Продавец' : '🛒 Покупатель'} ${isBlocked ? ' <span class="badge badge-danger">Заблокирован</span>' : ''}</p>
+                        <p style="color:var(--text-secondary);">
+                            Роль: ${user.role === 'admin' ? '👑 Администратор' : user.role === 'seller' ? '🏪 Продавец' : '🛒 Покупатель'}
+                            ${isBlocked ? ' <span class="badge badge-danger">Заблокирован</span>' : ''}
+                        </p>
+                        <div style="margin-top:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                            <div class="balance-display">
+                                <i class="fas fa-wallet"></i> Баланс: ${balance.toFixed(2)} АР
+                            </div>
+                            ${user.role === 'buyer' ? `<button class="btn btn-secondary btn-sm" onclick="transferBalance()"><i class="fas fa-paper-plane"></i> Перевести</button>` : ''}
+                            ${user.role === 'seller' ? `<button class="btn btn-warning btn-sm" onclick="withdrawBalance()"><i class="fas fa-arrow-up"></i> Вывести</button>` : ''}
+                            ${user.role === 'admin' ? `<button class="btn btn-success btn-sm" onclick="depositBalance()"><i class="fas fa-plus"></i> Пополнить</button>` : ''}
+                            <button class="btn btn-info btn-sm" onclick="openPZV()"><i class="fas fa-store-alt"></i> ПВЗ</button>
+                        </div>
                     </div>
             `;
 
+            // Транзакции пользователя (сворачиваемые)
+            if (transactions.length > 0) {
+                html += `
+                    <div class="profile-card">
+                        <div class="collapsible-header" onclick="this.nextElementSibling.classList.toggle('open')">
+                            <i class="fas fa-history"></i> Мои транзакции (${transactions.length})
+                            <i class="fas fa-chevron-down" style="font-size:12px;color:var(--text-secondary);"></i>
+                        </div>
+                        <div class="collapsible-content">
+                            <div class="transaction-log">
+                                ${transactions.map(tr => {
+                                    const typeClass = 'type-' + tr.type;
+                                    const typeLabels = {
+                                        'deposit': '💰 Пополнение',
+                                        'withdraw': '💳 Вывод',
+                                        'transfer_in': '📥 Входящий перевод',
+                                        'transfer_out': '📤 Исходящий перевод',
+                                        'refund': '🔄 Возврат'
+                                    };
+                                    const sign = tr.type === 'withdraw' || tr.type === 'transfer_out' ? '-' : '+';
+                                    const color = tr.type === 'withdraw' || tr.type === 'transfer_out' ? 'var(--danger)' : 'var(--success)';
+                                    return `
+                                        <div class="tr-item">
+                                            <span>${typeLabels[tr.type] || tr.type}</span>
+                                            <span style="color:${color};">${sign} ${tr.amount.toFixed(2)} АР</span>
+                                            <span style="color:var(--text-secondary);font-size:11px;">${new Date(tr.created_at).toLocaleString()}</span>
+                                            <span style="color:var(--text-secondary);font-size:11px;">${tr.description || ''}</span>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Админ-панель с логами всех транзакций
             if (user.role === 'admin') {
                 const allShops = await getShops();
                 const allUsers = await getUsers();
@@ -2608,6 +2978,8 @@
                 html += `
                     <div class="profile-card admin-panel">
                         <div class="card-title"><i class="fas fa-shield-alt"></i> Админ-панель</div>
+
+                        <!-- Заявки на магазины -->
                         <div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.15);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
                             <h4 style="font-size:15px;color:var(--warning);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-clock"></i> Заявки на магазины (${pendingShops.length})</h4>
                 `;
@@ -2637,6 +3009,8 @@
 
                 html += `
                         </div>
+
+                        <!-- Товары на проверку -->
                         <div style="background:rgba(6,182,212,0.05);border:1px solid rgba(6,182,212,0.15);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
                             <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-boxes"></i> Товары на проверку (${pendingProducts.length})</h4>
                 `;
@@ -2666,29 +3040,8 @@
 
                 html += `
                         </div>
-                        <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
-                            <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-cubes"></i> Все товары (${allProducts.length})</h4>
-                            <div style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;">
-                `;
 
-                if (allProducts.length === 0) {
-                    html += `<p style="color:var(--text-secondary);font-size:13px;">Нет товаров</p>`;
-                } else {
-                    for (const p of allProducts.slice().reverse()) {
-                        const statusLabel = p.status === 'approved' ? '✅' : p.status === 'pending' ? '⏳' : '❌';
-                        html += `
-                            <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 10px;background:rgba(255,255,255,0.02);border-radius:6px;flex-wrap:wrap;gap:4px;font-size:13px;">
-                                <span>${p.icon || '📦'} ${p.name}</span>
-                                <span style="color:var(--text-secondary);font-size:11px;">${p.seller} · ${statusLabel}</span>
-                                <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}', true)" style="font-size:10px;padding:2px 8px;"><i class="fas fa-trash"></i></button>
-                            </div>
-                        `;
-                    }
-                }
-
-                html += `
-                            </div>
-                        </div>
+                        <!-- Управление продавцами -->
                         <div style="background:rgba(34,197,94,0.03);border:1px solid rgba(34,197,94,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
                             <h4 style="font-size:15px;color:var(--success);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-store-alt"></i> Управление продавцами</h4>
                             <div style="display:flex;flex-direction:column;gap:6px;">
@@ -2714,10 +3067,47 @@
                 html += `
                             </div>
                         </div>
+
+                        <!-- ВСЕ ТРАНЗАКЦИИ (АДМИН ЛОГ) -->
+                        <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                            <div class="collapsible-header" onclick="this.nextElementSibling.classList.toggle('open')">
+                                <i class="fas fa-list"></i> Все транзакции (${allTransactions.length})
+                                <i class="fas fa-chevron-down" style="font-size:12px;color:var(--text-secondary);"></i>
+                            </div>
+                            <div class="collapsible-content">
+                                <div class="transaction-log" style="max-height:400px;">
+                                    ${allTransactions.length === 0 ? '<p style="color:var(--text-secondary);">Нет транзакций</p>' : allTransactions.map(tr => {
+                                        const typeClass = 'type-' + tr.type;
+                                        const typeLabels = {
+                                            'deposit': '💰 Пополнение',
+                                            'withdraw': '💳 Вывод',
+                                            'transfer_in': '📥 Входящий перевод',
+                                            'transfer_out': '📤 Исходящий перевод',
+                                            'refund': '🔄 Возврат'
+                                        };
+                                        const sign = tr.type === 'withdraw' || tr.type === 'transfer_out' ? '-' : '+';
+                                        const color = tr.type === 'withdraw' || tr.type === 'transfer_out' ? 'var(--danger)' : 'var(--success)';
+                                        return `
+                                            <div class="tr-item">
+                                                <span style="font-weight:500;">${tr.username}</span>
+                                                <span>${typeLabels[tr.type] || tr.type}</span>
+                                                <span style="color:${color};">${sign} ${tr.amount.toFixed(2)} АР</span>
+                                                <span style="color:var(--text-secondary);font-size:11px;">${new Date(tr.created_at).toLocaleString()}</span>
+                                                <span style="color:var(--text-secondary);font-size:11px;">${tr.description || ''}</span>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Правила -->
                         <div style="background:rgba(251,191,36,0.03);border:1px solid rgba(251,191,36,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
                             <h4 style="font-size:15px;color:var(--warning);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-gavel"></i> Правила</h4>
                             <button class="btn btn-primary btn-sm" onclick="openRulesEditor()"><i class="fas fa-edit"></i> Редактировать правила</button>
                         </div>
+
+                        <!-- Пункты выдачи -->
                         <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;">
                             <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-map-pin"></i> Пункты выдачи (${points.length})</h4>
                             <div class="pickup-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
@@ -2729,6 +3119,7 @@
                 `;
             }
 
+            // SELLER PANEL
             if (user.role === 'seller') {
                 const pending = userData && userData.pending;
 
@@ -2787,6 +3178,9 @@
                                     <div class="pickup">📍 ${o.pickup}</div>
                                     <div class="flex-between" style="margin-top:6px;">
                                         <span class="total">${o.currency === 'AR' ? '🟣' : '💎'} ${o.currency === 'AR' ? o.total_ar.toFixed(2) + ' АР' : o.total_diamonds.toFixed(2) + ' алм'}</span>
+                                        <span style="font-size:12px;color:var(--text-secondary);">
+                                            Оплата: ${o.payment_method === 'balance' ? '💳 С баланса' : '📦 При получении'}
+                                        </span>
                                         <span class="badge ${statusColors[o.status] || 'badge-warning'}">${statusLabels[o.status] || o.status}</span>
                                     </div>
                                     <div class="status-actions">
@@ -2803,6 +3197,7 @@
                 }
             }
 
+            // BUYER ORDERS
             if (buyerOrders.length > 0) {
                 const statusLabels = { 'pending': '⏳ Ожидает', 'processing': '🔄 В обработке', 'ready': '✅ Готов',
                     'completed': '📦 Выдан', 'cancelled': '❌ Отменён' };
@@ -2828,6 +3223,9 @@
                             <div class="pickup">📍 ${o.pickup}</div>
                             <div class="flex-between" style="margin-top:6px;">
                                 <span class="total">${o.currency === 'AR' ? '🟣' : '💎'} ${o.currency === 'AR' ? o.total_ar.toFixed(2) + ' АР' : o.total_diamonds.toFixed(2) + ' алм'}</span>
+                                <span style="font-size:12px;color:var(--text-secondary);">
+                                    Оплата: ${o.payment_method === 'balance' ? '💳 С баланса' : '📦 При получении'}
+                                </span>
                                 <span class="badge ${statusColors[o.status] || 'badge-warning'}">${statusLabels[o.status] || o.status}</span>
                             </div>
                             ${canCancel ? `
@@ -2896,16 +3294,6 @@
             document.getElementById('header').classList.toggle('scrolled', window.scrollY > 20);
         });
 
-        // ============================================================
-        // ДИНАМИЧЕСКАЯ ВЫСОТА ШАПКИ (ИСПРАВЛЕНО)
-        // ============================================================
-        // Раньше отступ контента от фиксированной шапки был захардкожен
-        // (74px / 120px на мобильных). Если шапка переносилась на большее
-        // число строк, чем предполагалось (длинное имя пользователя,
-        // узкий экран, другой шрифт и т.п.), верх страницы — включая меню
-        // в профиле — уезжал под шапку и визуально пропадал при скролле.
-        // ResizeObserver следит за РЕАЛЬНОЙ высотой шапки и обновляет
-        // --header-height, поэтому это больше не может повториться.
         (function setupHeaderHeightSync() {
             const header = document.getElementById('header');
             if (!header) return;
@@ -2943,18 +3331,10 @@
                 console.log('💎 1 АР = 3 алмаза');
                 console.log('🗄️ Данные хранятся в Vercel PostgreSQL (Neon)');
                 console.log('📋 Горячие клавиши: Ctrl+1(каталог) Ctrl+2(корзина) Ctrl+3(профиль) Ctrl+4(избранное) Ctrl+5(правила)');
+                console.log('💰 Добавлена система баланса и ПВЗ');
             } catch (error) {
-                // ИСПРАВЛЕНО: раньше при сбое подключения к БД показывался
-                // только общий тост "Ошибка подключения к базе данных",
-                // который через 4 секунды исчезал, а РЕАЛЬНАЯ причина
-                // (например "POSTGRES_URL not configured") была видна
-                // только в консоли браузера. Теперь настоящая причина
-                // показывается прямо на странице, постоянно, с кнопкой
-                // "Повторить" — не нужно лезть в DevTools, чтобы понять,
-                // что именно сломалось.
                 console.error('Ошибка запуска:', error);
-                const realReason = error?.message || 'неизвестная ошибка';
-                showToast('❌ Не удалось подключиться к серверу: ' + realReason, 'error', 8000);
+                showToast('❌ Ошибка подключения к базе данных: ' + error.message, 'error', 8000);
 
                 const main = document.querySelector('.main .container') || document.querySelector('.main');
                 if (main) {
@@ -2962,8 +3342,8 @@
                         <div class="empty-state" style="border:1px solid rgba(239,68,68,0.25);background:rgba(239,68,68,0.05);border-radius:var(--radius);padding:40px 24px;">
                             <i class="fas fa-plug-circle-xmark" style="color:var(--danger);"></i>
                             <h3>Не удалось подключиться к серверу</h3>
-                            <p style="color:var(--danger);font-family:monospace;font-size:13px;word-break:break-word;">${realReason}</p>
-                            <p>Обычно это значит, что на сервере не настроена или отвязалась переменная <code>POSTGRES_URL</code> (подключение к базе данных Neon).</p>
+                            <p style="color:var(--danger);font-family:monospace;font-size:13px;word-break:break-word;">${error.message}</p>
+                            <p>Проверьте переменную <code>POSTGRES_URL</code> в настройках Vercel.</p>
                             <button class="btn btn-primary" onclick="location.reload()"><i class="fas fa-rotate-right"></i> Повторить</button>
                         </div>
                     `;
