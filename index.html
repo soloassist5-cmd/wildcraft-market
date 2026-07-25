@@ -480,8 +480,6 @@
                     <select id="loginRole">
                         <option value="buyer">Покупатель</option>
                         <option value="seller">Продавец</option>
-                        <option value="courier">Курьер</option>
-                        <option value="staff">Сотрудник ПВЗ</option>
                     </select>
                 </div>
                 <button type="submit" class="btn btn-primary btn-block" id="loginSubmitBtn">Войти</button>
@@ -1004,14 +1002,14 @@
                     password,
                     role: role,
                     shop_id: null,
-                    approved: role === 'buyer' || role === 'courier' || role === 'staff' ? true : false,
+                    approved: role === 'buyer' ? true : false,
                     pending: role === 'seller' ? true : false,
                     blocked: false
                 };
                 users.push(newUser);
                 await setUsers(users);
-                if (role === 'buyer' || role === 'courier' || role === 'staff') {
-                    setCurrentUser({ username, role });
+                if (role === 'buyer') {
+                    setCurrentUser({ username, role: 'buyer' });
                     showToast('Добро пожаловать, ' + username + '!', 'success');
                     document.getElementById('loginModal').classList.remove('open');
                     renderUI();
@@ -1169,7 +1167,7 @@
         });
 
         // ============================================================
-        // ОБНОВЛЕНИЕ СТАТУСА ЗАКАЗА (БЕЗОПАСНАЯ ВЕРСИЯ)
+        // ОБНОВЛЕНИЕ СТАТУСА ЗАКАЗА
         // ============================================================
         window.updateOrderStatus = async function(orderId, status, btnEl) {
             const user = getCurrentUser();
@@ -1890,7 +1888,6 @@
                 return;
             }
             try {
-                await archiveOrders();
                 const archiveData = await apiCall('get', 'orders_archive');
                 const modal = document.getElementById('archiveModal');
                 const content = document.getElementById('archiveContent');
@@ -2785,7 +2782,7 @@
         }
 
         // ============================================================
-        // ПРОФИЛЬ (RENDER) - ПОЛНАЯ ВЕРСИЯ
+        // ПРОФИЛЬ (RENDER)
         // ============================================================
         async function renderProfile() {
             const container = document.getElementById('profileContent');
@@ -2833,8 +2830,6 @@
                 html += `
                     <div class="profile-card admin-panel">
                         <div class="card-title"><i class="fas fa-shield-alt"></i> Админ-панель</div>
-
-                        <!-- Заявки на магазины -->
                         <div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.15);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
                             <h4 style="font-size:15px;color:var(--warning);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-clock"></i> Заявки на магазины (${pendingShops.length})</h4>
                 `;
@@ -2864,8 +2859,6 @@
 
                 html += `
                         </div>
-
-                        <!-- Товары на проверку -->
                         <div style="background:rgba(6,182,212,0.05);border:1px solid rgba(6,182,212,0.15);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
                             <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-boxes"></i> Товары на проверку (${pendingProducts.length})</h4>
                 `;
@@ -2895,8 +2888,6 @@
 
                 html += `
                         </div>
-
-                        <!-- Управление продавцами -->
                         <div style="background:rgba(34,197,94,0.03);border:1px solid rgba(34,197,94,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
                             <h4 style="font-size:15px;color:var(--success);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-store-alt"></i> Управление продавцами</h4>
                             <div style="display:flex;flex-direction:column;gap:6px;">
@@ -2923,8 +2914,6 @@
                 html += `
                             </div>
                         </div>
-
-                        <!-- Управление курьерами -->
                         <div style="background:rgba(251,191,36,0.03);border:1px solid rgba(251,191,36,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
                             <h4 style="font-size:15px;color:var(--warning);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-truck"></i> Управление курьерами</h4>
                             <div style="display:flex;flex-direction:column;gap:6px;">
@@ -2951,8 +2940,6 @@
                 html += `
                             </div>
                         </div>
-
-                        <!-- Управление сотрудниками ПВЗ -->
                         <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
                             <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-warehouse"></i> Сотрудники ПВЗ</h4>
                             <div style="display:flex;flex-direction:column;gap:6px;">
@@ -2982,7 +2969,6 @@
 
                 // Управление покупателями
                 const buyers = allUsers.filter(u => u.role === 'buyer');
-                const activeStatuses = ['pending', 'processing', 'ready_for_courier', 'in_transit', 'ready_for_pickup'];
 
                 html += `
                     <details class="tx-log buyers-panel">
@@ -2995,31 +2981,17 @@
                 } else {
                     for (const b of buyers) {
                         const buyerBalance = balanceMap[b.username] || 0;
-                        const activeOrders = orders.filter(o => o.buyer === b.username && activeStatuses.includes(o.status));
                         html += `
                             <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                                     <div>
                                         <div style="font-weight:600;">🛒 ${b.username}</div>
                                         <div style="font-size:13px;color:var(--secondary);margin-top:2px;">🟣 Баланс: ${buyerBalance} АР</div>
-                                        ${activeOrders.length > 0 ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Действующие заказы: ${activeOrders.map(o => `#${o.id} (${ORDER_STATUSES[o.status]?.label || o.status})`).join(', ')}</div>` : ''}
                                     </div>
                                     <button class="btn btn-danger btn-sm" onclick="adminResetBalance('${b.username}')" ${buyerBalance === 0 ? 'disabled' : ''}><i class="fas fa-ban"></i> Обнулить баланс</button>
                                 </div>
+                            </div>
                         `;
-                        if (activeOrders.length > 0) {
-                            html +=
-                                `<div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;gap:6px;">`;
-                            for (const o of activeOrders) {
-                                html += `
-                                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;padding:6px 10px;background:rgba(255,255,255,0.02);border-radius:6px;font-size:13px;">
-                                        <span>#${o.id} · ${ORDER_STATUSES[o.status]?.label || o.status} · 🏪 ${o.seller} · ${o.currency === 'AR' ? '🟣 ' + o.total_ar + ' АР' : '💎 ' + o.total_diamonds + ' алм'}</span>
-                                    </div>
-                                `;
-                            }
-                            html += `</div>`;
-                        }
-                        html += `</div>`;
                     }
                 }
 
@@ -3434,4 +3406,4 @@
         })();
     </script>
 </body>
-    </html>
+</html>
