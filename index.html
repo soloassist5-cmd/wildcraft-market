@@ -228,6 +228,10 @@
         .staff-order-group { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 12px; }
         .staff-order-group .pickup-title { font-size: 16px; font-weight: 700; color: var(--secondary); margin-bottom: 10px; }
         .staff-order-item-inner { background: rgba(255, 255, 255, 0.02); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .pending-commission-warning { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: var(--radius-sm); padding: 12px 16px; margin-top: 8px; }
+        .pending-commission-warning .title { color: var(--warning); font-weight: 600; }
+        .pending-commission-warning .amount { font-weight: 700; color: var(--warning); }
+        .pending-commission-warning .hint { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
 
         .select-wrap { position: relative; display: inline-block; min-width: 200px; }
         .select-wrap select { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); color: var(--text-primary); padding: 10px 40px 10px 16px; border-radius: var(--radius-sm); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; appearance: none; -webkit-appearance: none; width: 100%; transition: all 0.25s var(--transition); }
@@ -246,6 +250,13 @@
             border-radius: 12px;
             display: inline-block;
             font-family: monospace;
+        }
+
+        .commission-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
         }
 
         @media (max-width: 768px) {
@@ -661,6 +672,31 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="forceCommissionModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>💳 Принудительное списание комиссии</h2>
+                <button class="close" onclick="document.getElementById('forceCommissionModal').classList.remove('open')">&times;</button>
+            </div>
+            <form id="forceCommissionForm">
+                <div class="form-group">
+                    <label>Продавец</label>
+                    <input type="text" id="forceCommissionSeller" placeholder="Логин продавца" required />
+                </div>
+                <div class="form-group">
+                    <label>Сумма (АР)</label>
+                    <input type="number" id="forceCommissionAmount" placeholder="Сумма для списания" min="1" step="1" required />
+                </div>
+                <div class="form-group">
+                    <label style="color:var(--danger);">⚠️ ВНИМАНИЕ</label>
+                    <p style="font-size:13px;color:var(--text-secondary);">Средства будут списаны с баланса продавца. Если средств недостаточно — баланс уйдёт в минус.</p>
+                </div>
+                <button type="submit" class="btn btn-danger btn-block">💳 Принудительно списать</button>
+            </form>
+            <div id="forceCommissionResult" style="margin-top:12px;"></div>
+        </div>
+    </div>
+
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
@@ -685,7 +721,7 @@
             'Зелья': '🧪',
             'Другое': '📦'
         };
-        const COMMISSION_PERCENT = 10; // 10% комиссия на баланс Admin
+        const COMMISSION_PERCENT = 10;
 
         const ORDER_STATUSES = {
             'pending': { label: '⏳ Ожидает', color: 'badge-warning' },
@@ -798,6 +834,10 @@
             const all = await getAllTransactions();
             return all.filter(t => t.username === username);
         }
+        async function getPendingCommissions() {
+            const result = await apiCall('get', 'pending_commissions');
+            return result || [];
+        }
         async function topUpBalanceDB(username, amount, actor) {
             return apiCall('topUpBalance', 'balances', { username, amount, actor });
         }
@@ -847,6 +887,9 @@
         async function archiveOrders() {
             return apiCall('archiveOrders');
         }
+        async function forceDeductCommissionDB(seller, amount, actor) {
+            return apiCall('forceDeductCommission', null, { seller, amount, actor });
+        }
 
         function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
@@ -888,7 +931,6 @@
 
         async function initData() {
             try {
-                // Получаем IP
                 userIP = await getIP();
                 console.log('🌐 IP:', userIP);
 
@@ -1299,8 +1341,9 @@
         };
 
         // ============================================================
-        // АДМИН-ПАНЕЛЬ — ИСПРАВЛЕННОЕ УДАЛЕНИЕ ПРОДАВЦА
+        // АДМИН-ПАНЕЛЬ
         // ============================================================
+
         window.deleteSeller = async function(sellerUsername) {
             const user = getCurrentUser();
             if (!user || user.role !== 'admin') {
@@ -1316,23 +1359,18 @@
                 return;
 
             try {
-                // 1. Получаем магазин продавца
                 const shops = await getShops();
                 const shop = shops.find(s => s.owner === sellerUsername);
 
                 if (shop) {
-                    // 2. Удаляем все товары продавца
                     const products = await getProducts();
                     const sellerProducts = products.filter(p => p.seller === sellerUsername);
                     for (const p of sellerProducts) {
                         await deleteProductDB(p.id);
                     }
-
-                    // 3. Удаляем магазин
                     await deleteShopDB(shop.id);
                 }
 
-                // 4. Удаляем пользователя
                 await deleteUserDB(sellerUsername);
 
                 clearApiCache();
@@ -1491,6 +1529,55 @@
         };
 
         // ============================================================
+        // ПРИНУДИТЕЛЬНОЕ СПИСАНИЕ КОМИССИИ (АДМИН)
+        // ============================================================
+        window.openForceCommission = function() {
+            const user = getCurrentUser();
+            if (!user || user.role !== 'admin') {
+                showToast('Только администратор может принудительно списывать комиссию!', 'error');
+                return;
+            }
+            document.getElementById('forceCommissionModal').classList.add('open');
+            document.getElementById('forceCommissionResult').innerHTML = '';
+            document.getElementById('forceCommissionForm').reset();
+        };
+
+        document.getElementById('forceCommissionForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const user = getCurrentUser();
+            if (!user || user.role !== 'admin') {
+                showToast('Только администратор может принудительно списывать комиссию!', 'error');
+                return;
+            }
+            const seller = document.getElementById('forceCommissionSeller').value.trim();
+            const amount = parseInt(document.getElementById('forceCommissionAmount').value, 10);
+
+            if (!seller || !amount || amount <= 0) {
+                showToast('Заполните все поля корректно!', 'error');
+                return;
+            }
+
+            const resultDiv = document.getElementById('forceCommissionResult');
+
+            try {
+                const result = await forceDeductCommissionDB(seller, amount, user.username);
+                if (result && result.error) throw new Error(result.error);
+
+                resultDiv.innerHTML =
+                    `<div class="badge badge-success">✅ Списано ${amount} АР с продавца ${seller}. Баланс может уйти в минус.</div>`;
+                showToast(`✅ Списано ${amount} АР комиссии с ${seller}`, 'success');
+                document.getElementById('forceCommissionForm').reset();
+                renderUI();
+                setTimeout(() => {
+                    document.getElementById('forceCommissionModal').classList.remove('open');
+                }, 1500);
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="badge badge-danger">❌ ${error.message}</div>`;
+                showToast('❌ Ошибка: ' + error.message, 'error');
+            }
+        });
+
+        // ============================================================
         // ПРОСМОТР ПРОФИЛЯ ПРОДАВЦА (АДМИН)
         // ============================================================
         window.viewSellerProfile = async function(username) {
@@ -1504,6 +1591,34 @@
                 const modal = document.getElementById('sellerProfileModal');
                 const content = document.getElementById('sellerProfileContent');
                 document.getElementById('sellerProfileTitle').textContent = '👤 Профиль: ' + username;
+
+                const pendingComm = data.pendingCommission || 0;
+                const balance = data.balance || 0;
+                const threshold = Math.floor(balance * COMMISSION_PERCENT / 100);
+
+                let commissionHtml = `
+                    <div style="margin-top:12px;padding:12px 16px;background:rgba(124,58,237,0.05);border:1px solid rgba(124,58,237,0.1);border-radius:var(--radius-sm);">
+                        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                            <span><strong>📊 Накоплено комиссии:</strong> ${pendingComm} АР</span>
+                            <span><strong>💰 Баланс:</strong> ${balance} АР</span>
+                            <span><strong>📈 Порог списания (10%):</strong> ${threshold} АР</span>
+                        </div>
+                        ${pendingComm >= threshold && pendingComm > 0 ? `
+                            <div style="margin-top:8px;color:var(--success);">
+                                ✅ Накоплено достаточно для списания (${pendingComm} >= ${threshold})
+                            </div>
+                        ` : pendingComm > 0 ? `
+                            <div style="margin-top:8px;color:var(--warning);">
+                                ⏳ Нужно ещё ${threshold - pendingComm} АР для авто-списания
+                            </div>
+                        ` : ''}
+                        <div style="margin-top:8px;">
+                            <button class="btn btn-danger btn-sm" onclick="forceDeductCommissionFromProfile('${username}')">
+                                <i class="fas fa-bolt"></i> Принудительно списать
+                            </button>
+                        </div>
+                    </div>
+                `;
 
                 let html = `
                     <div class="seller-profile-card">
@@ -1528,6 +1643,7 @@
                         <div style="margin-top:12px;">
                             <span class="ip-display"><i class="fas fa-network-wired"></i> IP: ${userIP}</span>
                         </div>
+                        ${commissionHtml}
                     </div>
                 `;
 
@@ -1594,6 +1710,7 @@
                         <button class="btn btn-danger" onclick="adminResetBalance('${username}')"><i class="fas fa-ban"></i> Обнулить баланс</button>
                         <button class="btn btn-danger" onclick="toggleBlockUser('${username}')"><i class="fas fa-lock"></i> Блокировать</button>
                         <button class="btn btn-danger" onclick="deleteSeller('${username}')"><i class="fas fa-user-slash"></i> Удалить продавца</button>
+                        <button class="btn btn-warning" onclick="forceDeductCommissionFromProfile('${username}')"><i class="fas fa-bolt"></i> Списать комиссию</button>
                     </div>
                 `;
 
@@ -1601,6 +1718,33 @@
                 modal.classList.add('open');
             } catch (error) {
                 console.error('Ошибка загрузки профиля:', error);
+                showToast('❌ Ошибка: ' + error.message, 'error');
+            }
+        };
+
+        window.forceDeductCommissionFromProfile = async function(username) {
+            const user = getCurrentUser();
+            if (!user || user.role !== 'admin') {
+                showToast('Только администратор может принудительно списывать комиссию!', 'error');
+                return;
+            }
+            const amount = prompt('Введите сумму для списания (АР):');
+            if (!amount) return;
+            const amt = parseInt(amount, 10);
+            if (!amt || amt <= 0) {
+                showToast('Введите корректную сумму!', 'error');
+                return;
+            }
+            if (!confirm(`Списать ${amt} АР комиссии с продавца ${username}? Баланс может уйти в минус.`))
+                return;
+
+            try {
+                const result = await forceDeductCommissionDB(username, amt, user.username);
+                if (result && result.error) throw new Error(result.error);
+                showToast(`✅ Списано ${amt} АР комиссии с ${username}`, 'success');
+                renderUI();
+                document.getElementById('sellerProfileModal').classList.remove('open');
+            } catch (error) {
                 showToast('❌ Ошибка: ' + error.message, 'error');
             }
         };
@@ -1991,7 +2135,9 @@
             balance_voided: { icon: '🔒', label: 'Аннулирование баланса' },
             balance_reset: { icon: '🚫', label: 'Обнуление баланса (админ)' },
             delivery_fee: { icon: '🚚', label: 'Доставка' },
-            commission: { icon: '🏛️', label: 'Комиссия' }
+            commission: { icon: '🏛️', label: 'Комиссия' },
+            commission_pending: { icon: '📊', label: 'Накопление комиссии' },
+            commission_forced: { icon: '⚡', label: 'Принудительное списание' }
         };
 
         function renderTransactionRows(transactions) {
@@ -2895,7 +3041,7 @@
         }
 
         // ============================================================
-        // ПРОФИЛЬ (RENDER) — С IP-АДРЕСОМ
+        // ПРОФИЛЬ (RENDER) — С IP-АДРЕСОМ И КОМИССИЕЙ
         // ============================================================
         async function renderProfile() {
             const container = document.getElementById('profileContent');
@@ -2907,7 +3053,7 @@
                 return;
             }
 
-            const [users, shops, orders, bannedUsers, allBalances, allProducts, rules, points] = await Promise.all([
+            const [users, shops, orders, bannedUsers, allBalances, allProducts, rules, points, pendingCommissions] = await Promise.all([
                 getUsers(),
                 getShops(),
                 getOrders(),
@@ -2915,7 +3061,8 @@
                 getBalances(),
                 getProducts(),
                 getRules(),
-                getPickupPoints()
+                getPickupPoints(),
+                getPendingCommissions()
             ]);
 
             const userData = users.find(u => u.username === user.username);
@@ -2928,27 +3075,25 @@
             const pendingProducts = allProducts.filter(p => p.status === 'pending');
             const balanceMap = {};
             for (const bal of allBalances) balanceMap[bal.username] = Number(bal.balance);
+            const pendingCommMap = {};
+            for (const pc of pendingCommissions) pendingCommMap[pc.seller] = Number(pc.amount);
 
-            let html = `
-                <div class="profile-grid">
-                    <div class="profile-card">
-                        <div class="card-title"><i class="fas fa-user"></i> ${user.username} ${isBlocked ? '🔒' : ''}</div>
-                        <p style="color:var(--text-secondary);">Роль: ${user.role === 'admin' ? '👑 Администратор' : user.role === 'staff' ? '📮 Сотрудник ПВЗ' : user.role === 'courier' ? '🚚 Курьер' : user.role === 'seller' ? '🏪 Продавец' : '🛒 Покупатель'} ${isBlocked ? ' <span class="badge badge-danger">Заблокирован</span>' : ''}</p>
-                        <div style="margin-top:8px;">
-                            <span class="ip-display"><i class="fas fa-network-wired"></i> IP: ${userIP}</span>
-                        </div>
-                    </div>
-            `;
+            const myPending = pendingCommMap[user.username] || 0;
+            const myBalance = balanceMap[user.username] || 0;
+            const threshold = Math.floor(myBalance * COMMISSION_PERCENT / 100);
+            const canAutoDeduct = myPending >= threshold && myPending > 0;
 
-            // ===== АДМИН =====
+            // ---- АДМИН КОНТЕНТ ----
+            let adminPanel = '';
             if (user.role === 'admin') {
                 const allShops = shops;
                 const allUsers = users;
                 const sellers = allUsers.filter(u => u.role === 'seller');
                 const couriers = allUsers.filter(u => u.role === 'courier');
                 const staffMembers = allUsers.filter(u => u.role === 'staff');
+                const buyers = allUsers.filter(u => u.role === 'buyer');
 
-                html += `
+                adminPanel = `
                     <div class="profile-card admin-panel">
                         <div class="card-title"><i class="fas fa-shield-alt"></i> Админ-панель</div>
                         <div style="background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.15);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
@@ -2956,10 +3101,10 @@
                 `;
 
                 if (pendingShops.length === 0) {
-                    html += `<p style="color:var(--text-secondary);font-size:14px;">✅ Нет заявок</p>`;
+                    adminPanel += `<p style="color:var(--text-secondary);font-size:14px;">✅ Нет заявок</p>`;
                 } else {
                     for (const s of pendingShops) {
-                        html += `
+                        adminPanel += `
                             <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:14px;margin-bottom:10px;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                                     <div>
@@ -2978,17 +3123,17 @@
                     }
                 }
 
-                html += `
+                adminPanel += `
                         </div>
                         <div style="background:rgba(6,182,212,0.05);border:1px solid rgba(6,182,212,0.15);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
                             <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-boxes"></i> Товары на проверку (${pendingProducts.length})</h4>
                 `;
 
                 if (pendingProducts.length === 0) {
-                    html += `<p style="color:var(--text-secondary);font-size:14px;">✅ Нет товаров</p>`;
+                    adminPanel += `<p style="color:var(--text-secondary);font-size:14px;">✅ Нет товаров</p>`;
                 } else {
                     for (const p of pendingProducts) {
-                        html += `
+                        adminPanel += `
                             <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                                     <div>
@@ -3007,7 +3152,7 @@
                     }
                 }
 
-                html += `
+                adminPanel += `
                         </div>
                         <div style="background:rgba(34,197,94,0.03);border:1px solid rgba(34,197,94,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
                             <h4 style="font-size:15px;color:var(--success);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-store-alt"></i> Управление продавцами</h4>
@@ -3015,24 +3160,29 @@
                 `;
 
                 if (sellers.length === 0) {
-                    html += `<p style="color:var(--text-secondary);font-size:13px;">Нет продавцов</p>`;
+                    adminPanel += `<p style="color:var(--text-secondary);font-size:13px;">Нет продавцов</p>`;
                 } else {
                     for (const s of sellers) {
                         const isBanned = bannedUsers.includes(s.username);
                         const productCount = allProducts.filter(p => p.seller === s.username).length;
-                        html += `
+                        const pending = pendingCommMap[s.username] || 0;
+                        const bal = balanceMap[s.username] || 0;
+                        const thresh = Math.floor(bal * COMMISSION_PERCENT / 100);
+                        const ready = pending >= thresh && pending > 0;
+                        adminPanel += `
                             <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:rgba(255,255,255,0.02);border-radius:8px;flex-wrap:wrap;gap:4px;">
                                 <span style="font-weight:500;cursor:pointer;color:var(--accent);" onclick="viewSellerProfile('${s.username}')">${s.username} <span style="color:var(--text-secondary);font-size:11px;">(${productCount} товаров)</span></span>
                                 <span class="badge ${s.approved ? 'badge-success' : s.pending ? 'badge-warning' : 'badge-danger'}">${s.approved ? '✅ Одобрен' : s.pending ? '⏳ Ожидает' : '❌ Отклонён'}</span>
                                 ${s.approved ? `<button class="btn ${isBanned ? 'btn-success' : 'btn-danger'} btn-sm" onclick="toggleBlockUser('${s.username}')">${isBanned ? '🔓 Разблокировать' : '🔒 Заблокировать'}</button>` : ''}
                                 <button class="btn btn-danger btn-sm" onclick="deleteSeller('${s.username}')" style="background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.2);"><i class="fas fa-user-slash"></i> Удалить</button>
                                 <button class="btn btn-info btn-sm" onclick="viewSellerProfile('${s.username}')"><i class="fas fa-eye"></i> Профиль</button>
+                                ${pending > 0 ? `<span class="badge ${ready ? 'badge-success' : 'badge-warning'}">📊 ${pending} АР ${ready ? '✅' : '⏳'}</span>` : ''}
                             </div>
                         `;
                     }
                 }
 
-                html += `
+                adminPanel += `
                             </div>
                         </div>
                         <div style="background:rgba(251,191,36,0.03);border:1px solid rgba(251,191,36,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
@@ -3041,12 +3191,12 @@
                 `;
 
                 if (couriers.length === 0) {
-                    html += `<p style="color:var(--text-secondary);font-size:13px;">Нет курьеров</p>`;
+                    adminPanel += `<p style="color:var(--text-secondary);font-size:13px;">Нет курьеров</p>`;
                 } else {
                     for (const c of couriers) {
                         const isBanned = bannedUsers.includes(c.username);
                         const balance = balanceMap[c.username] || 0;
-                        html += `
+                        adminPanel += `
                             <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:rgba(255,255,255,0.02);border-radius:8px;flex-wrap:wrap;gap:4px;">
                                 <span style="font-weight:500;cursor:pointer;color:var(--accent);" onclick="viewCourierProfile('${c.username}')">${c.username} <span style="color:var(--text-secondary);font-size:11px;">(${balance} АР)</span></span>
                                 <span class="badge badge-success">✅ Активен</span>
@@ -3058,7 +3208,7 @@
                     }
                 }
 
-                html += `
+                adminPanel += `
                             </div>
                         </div>
                         <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
@@ -3067,12 +3217,12 @@
                 `;
 
                 if (staffMembers.length === 0) {
-                    html += `<p style="color:var(--text-secondary);font-size:13px;">Нет сотрудников ПВЗ</p>`;
+                    adminPanel += `<p style="color:var(--text-secondary);font-size:13px;">Нет сотрудников ПВЗ</p>`;
                 } else {
                     for (const s of staffMembers) {
                         if (s.username === STAFF_USERNAME) continue;
                         const isBanned = bannedUsers.includes(s.username);
-                        html += `
+                        adminPanel += `
                             <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 12px;background:rgba(255,255,255,0.02);border-radius:8px;flex-wrap:wrap;gap:4px;">
                                 <span style="font-weight:500;">📮 ${s.username}</span>
                                 <span class="badge badge-success">✅ Активен</span>
@@ -3083,26 +3233,24 @@
                     }
                 }
 
-                html += `
+                adminPanel += `
                             </div>
                         </div>
                 `;
 
-                // Управление покупателями
-                const buyers = allUsers.filter(u => u.role === 'buyer');
-
-                html += `
+                // Покупатели
+                adminPanel += `
                     <details class="tx-log buyers-panel">
                         <summary><i class="fas fa-users"></i> Покупатели (${buyers.length})</summary>
                         <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px;">
                 `;
 
                 if (buyers.length === 0) {
-                    html += `<p style="color:var(--text-secondary);font-size:13px;">Нет покупателей</p>`;
+                    adminPanel += `<p style="color:var(--text-secondary);font-size:13px;">Нет покупателей</p>`;
                 } else {
                     for (const b of buyers) {
                         const buyerBalance = balanceMap[b.username] || 0;
-                        html += `
+                        adminPanel += `
                             <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:var(--radius-sm);padding:12px;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
                                     <div>
@@ -3119,78 +3267,101 @@
                     }
                 }
 
-                html += `
+                adminPanel += `
                         </div>
                     </details>
                 `;
 
-                // Управление паролями
-                html += `
-                    <div style="background:rgba(124,58,237,0.03);border:1px solid rgba(124,58,237,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
-                        <h4 style="font-size:15px;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-key"></i> Управление паролями</h4>
-                        <button class="btn btn-primary btn-sm" onclick="openPasswordManager()"><i class="fas fa-edit"></i> Сменить пароль игроку</button>
-                    </div>
-                `;
-
-                // Активные сессии
-                html += `
-                    <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
-                        <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-desktop"></i> Активные сессии</h4>
-                        <div id="adminSessionsContainer"></div>
-                    </div>
-                `;
-
-                // Правила
-                html += `
-                    <div style="background:rgba(251,191,36,0.03);border:1px solid rgba(251,191,36,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
-                        <h4 style="font-size:15px;color:var(--warning);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-gavel"></i> Правила</h4>
-                        <button class="btn btn-primary btn-sm" onclick="openRulesEditor()"><i class="fas fa-edit"></i> Редактировать правила</button>
-                    </div>
-                `;
-
-                // Пункты выдачи
-                html += `
-                    <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;">
-                        <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-map-pin"></i> Пункты выдачи (${points.length})</h4>
-                        <div class="pickup-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-                            ${points.map(p => `<span class="tag">${p}<button class="del" onclick="removePickupPoint('${p}')">✕</button></span>`).join('')}
+                adminPanel += `
+                        <div style="background:rgba(124,58,237,0.03);border:1px solid rgba(124,58,237,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                            <h4 style="font-size:15px;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-key"></i> Управление паролями</h4>
+                            <button class="btn btn-primary btn-sm" onclick="openPasswordManager()"><i class="fas fa-edit"></i> Сменить пароль игроку</button>
                         </div>
-                        <button class="btn btn-primary btn-sm" onclick="addPickupPoint()"><i class="fas fa-plus"></i> Добавить</button>
+                        <div style="background:rgba(251,191,36,0.03);border:1px solid rgba(251,191,36,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                            <h4 style="font-size:15px;color:var(--warning);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-coins"></i> Управление комиссией</h4>
+                            <button class="btn btn-danger btn-sm" onclick="openForceCommission()"><i class="fas fa-bolt"></i> Принудительно списать комиссию</button>
+                        </div>
+                        <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                            <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-desktop"></i> Активные сессии</h4>
+                            <div id="adminSessionsContainer"></div>
+                        </div>
+                        <div style="background:rgba(251,191,36,0.03);border:1px solid rgba(251,191,36,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                            <h4 style="font-size:15px;color:var(--warning);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-gavel"></i> Правила</h4>
+                            <button class="btn btn-primary btn-sm" onclick="openRulesEditor()"><i class="fas fa-edit"></i> Редактировать правила</button>
+                        </div>
+                        <div style="background:rgba(6,182,212,0.03);border:1px solid rgba(6,182,212,0.1);border-radius:var(--radius-sm);padding:16px;margin-bottom:16px;">
+                            <h4 style="font-size:15px;color:var(--secondary);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-map-pin"></i> Пункты выдачи (${points.length})</h4>
+                            <div class="pickup-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                                ${points.map(p => `<span class="tag">${p}<button class="del" onclick="removePickupPoint('${p}')">✕</button></span>`).join('')}
+                            </div>
+                            <button class="btn btn-primary btn-sm" onclick="addPickupPoint()"><i class="fas fa-plus"></i> Добавить</button>
+                        </div>
+                        <div style="background:rgba(124,58,237,0.03);border:1px solid rgba(124,58,237,0.1);border-radius:var(--radius-sm);padding:16px;margin-top:16px;">
+                            <h4 style="font-size:15px;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-coins"></i> Пополнить баланс игрока</h4>
+                            <form class="inline-form" onsubmit="return handleAdminTopUp(event)">
+                                <input type="text" id="adminTopUpUsername" placeholder="Логин игрока" required />
+                                <input type="number" id="adminTopUpAmount" placeholder="Сумма АР" min="1" step="1" required />
+                                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Пополнить</button>
+                            </form>
+                        </div>
+                        <div style="background:rgba(34,197,94,0.03);border:1px solid rgba(34,197,94,0.1);border-radius:var(--radius-sm);padding:16px;margin-top:16px;">
+                            <h4 style="font-size:15px;color:var(--success);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-archive"></i> Архив заказов</h4>
+                            <button class="btn btn-primary btn-sm" onclick="openArchive()"><i class="fas fa-folder-open"></i> Открыть архив</button>
+                        </div>
+                        <details class="tx-log">
+                            <summary><i class="fas fa-receipt"></i> Лог всех транзакций (${(await getAllTransactions()).length})</summary>
+                            <div class="tx-list">${renderTransactionRows(await getAllTransactions())}</div>
+                        </details>
                     </div>
                 `;
-
-                // Пополнение баланса
-                html += `
-                    <div style="background:rgba(124,58,237,0.03);border:1px solid rgba(124,58,237,0.1);border-radius:var(--radius-sm);padding:16px;margin-top:16px;">
-                        <h4 style="font-size:15px;color:var(--accent);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-coins"></i> Пополнить баланс игрока</h4>
-                        <form class="inline-form" onsubmit="return handleAdminTopUp(event)">
-                            <input type="text" id="adminTopUpUsername" placeholder="Логин игрока" required />
-                            <input type="number" id="adminTopUpAmount" placeholder="Сумма АР" min="1" step="1" required />
-                            <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Пополнить</button>
-                        </form>
-                    </div>
-                `;
-
-                // Архив заказов
-                html += `
-                    <div style="background:rgba(34,197,94,0.03);border:1px solid rgba(34,197,94,0.1);border-radius:var(--radius-sm);padding:16px;margin-top:16px;">
-                        <h4 style="font-size:15px;color:var(--success);display:flex;align-items:center;gap:8px;margin-bottom:8px;"><i class="fas fa-archive"></i> Архив заказов</h4>
-                        <button class="btn btn-primary btn-sm" onclick="openArchive()"><i class="fas fa-folder-open"></i> Открыть архив</button>
-                    </div>
-                `;
-
-                // Лог транзакций
-                html += `
-                    <details class="tx-log">
-                        <summary><i class="fas fa-receipt"></i> Лог всех транзакций (${(await getAllTransactions()).length})</summary>
-                        <div class="tx-list">${renderTransactionRows(await getAllTransactions())}</div>
-                    </details>
-                `;
-
-                html += `</div>`;
             }
 
-            // ===== ПРОДАВЕЦ =====
+            // ---- ОСНОВНОЙ ПРОФИЛЬ ----
+            let commissionHtml = '';
+            if (user.role === 'seller') {
+                commissionHtml = `
+                    <div class="pending-commission-warning">
+                        <div class="title">📊 Накопленная комиссия</div>
+                        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:4px;">
+                            <span>Накоплено: <span class="amount">${myPending} АР</span></span>
+                            <span>Баланс: ${myBalance} АР</span>
+                            <span>Порог (10%): ${threshold} АР</span>
+                        </div>
+                        ${canAutoDeduct ? `
+                            <div style="color:var(--success);margin-top:4px;">
+                                ✅ Накоплено достаточно! Комиссия будет списана автоматически при следующей операции.
+                            </div>
+                        ` : myPending > 0 ? `
+                            <div class="hint">⏳ Нужно ещё ${threshold - myPending} АР для авто-списания</div>
+                        ` : `
+                            <div class="hint">Комиссия накапливается с каждого заказа (${COMMISSION_PERCENT}%)</div>
+                        `}
+                        ${myPending > 0 && user.role === 'seller' ? `
+                            <div style="margin-top:8px;">
+                                <button class="btn btn-sm btn-warning" onclick="showToast('Комиссия спишется автоматически при достижении порога ${threshold} АР','info')">
+                                    <i class="fas fa-info-circle"></i> Подробнее
+                                </button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+
+            let html = `
+                <div class="profile-grid">
+                    <div class="profile-card">
+                        <div class="card-title"><i class="fas fa-user"></i> ${user.username} ${isBlocked ? '🔒' : ''}</div>
+                        <p style="color:var(--text-secondary);">Роль: ${user.role === 'admin' ? '👑 Администратор' : user.role === 'staff' ? '📮 Сотрудник ПВЗ' : user.role === 'courier' ? '🚚 Курьер' : user.role === 'seller' ? '🏪 Продавец' : '🛒 Покупатель'} ${isBlocked ? ' <span class="badge badge-danger">Заблокирован</span>' : ''}</p>
+                        <div style="margin-top:8px;">
+                            <span class="ip-display"><i class="fas fa-network-wired"></i> IP: ${userIP}</span>
+                        </div>
+                        ${commissionHtml}
+                    </div>
+            `;
+
+            html += adminPanel;
+
+            // ---- ПРОДАВЕЦ ----
             if (user.role === 'seller') {
                 const pending = userData && userData.pending;
 
@@ -3264,7 +3435,7 @@
                 }
             }
 
-            // ===== ПОКУПАТЕЛЬ (заказы) =====
+            // ---- ПОКУПАТЕЛЬ ----
             if (buyerOrders.length > 0) {
                 html += `
                     <div class="profile-card"><div class="card-title">📜 Мои заказы (${buyerOrders.length})</div>
@@ -3356,6 +3527,23 @@
                     <div class="label">≈ ${(balance * AR_TO_DIAMONDS)} алмазов</div>
                 </div>
             `;
+
+            // Показываем накопленную комиссию для продавца
+            if (user.role === 'seller') {
+                const pendingComm = await getPendingCommissions();
+                const myPending = pendingComm.find(p => p.seller === user.username);
+                const pendingAmount = myPending ? myPending.amount : 0;
+                const threshold = Math.floor(balance * COMMISSION_PERCENT / 100);
+                if (pendingAmount > 0) {
+                    html += `
+                        <div class="pending-commission-warning" style="margin-bottom:16px;">
+                            <div class="title">📊 Накоплено комиссии: <span class="amount">${pendingAmount} АР</span></div>
+                            <div class="hint">Порог списания: ${threshold} АР (10% от баланса)</div>
+                            ${pendingAmount >= threshold ? `<div style="color:var(--success);font-weight:600;">✅ Будет списано при следующей операции</div>` : `<div class="hint">⏳ Нужно ещё ${threshold - pendingAmount} АР для авто-списания</div>`}
+                        </div>
+                    `;
+                }
+            }
 
             if (user.role === 'staff' || user.role === 'admin') {
                 const orders = await getOrders();
@@ -3532,7 +3720,7 @@
                 console.log('📮 Сотрудник ПВЗ: staff / Staff2026!');
                 console.log('🚚 Курьер: courier / Courier2026!');
                 console.log('💎 1 АР = 3 алмаза');
-                console.log('💰 Комиссия: ' + COMMISSION_PERCENT + '% на баланс Admin');
+                console.log('💰 Комиссия: ' + COMMISSION_PERCENT + '% накапливается, списывается при достижении 10% от баланса');
                 console.log(
                     '📋 Горячие клавиши: Ctrl+1(каталог) Ctrl+2(корзина) Ctrl+3(профиль) Ctrl+4(избранное) Ctrl+5(правила)'
                 );
