@@ -377,7 +377,7 @@ export default async function handler(req, res) {
             return res.status(200).json({ grouped, total: result.rows.length });
         }
 
-        // ===== ОБНОВЛЕНИЕ СТАТУСА ЗАКАЗА =====
+        // ===== ОБНОВЛЕНИЕ СТАТУСА ЗАКАЗА (С АВТО-АРХИВАЦИЕЙ) =====
         if (action === 'updateOrderStatus') {
             const orderId = id;
             const { actor, status } = data || {};
@@ -485,6 +485,15 @@ export default async function handler(req, res) {
                             await logTransaction(client, order.seller, 'sale', Number(order.total_ar), `Выплата за заказ #${orderId}`);
                         }
                         await client.query(`UPDATE orders SET delivered_at = NOW() WHERE id = $1`, [orderId]);
+                        
+                        // ===== АВТО-АРХИВАЦИЯ =====
+                        await client.query(
+                            `INSERT INTO orders_archive (
+                                id, buyer, seller, items, total_ar, total_diamonds, currency, pickup, status, payment_method, created_at, archived_at
+                            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())`,
+                            [order.id, order.buyer, order.seller, order.items, order.total_ar, order.total_diamonds, order.currency, order.pickup, 'completed', order.payment_method, order.created_at]
+                        );
+                        await client.query(`DELETE FROM orders WHERE id = $1`, [orderId]);
                         break;
 
                     case 'cancelled':
@@ -516,13 +525,25 @@ export default async function handler(req, res) {
                             await adjustBalance(client, order.buyer, Number(order.total_ar));
                             await logTransaction(client, order.buyer, 'refund', Number(order.total_ar), `Возврат за отменённый заказ #${orderId}`);
                         }
+                        
+                        // ===== АВТО-АРХИВАЦИЯ ОТМЕНЁННЫХ =====
+                        await client.query(
+                            `INSERT INTO orders_archive (
+                                id, buyer, seller, items, total_ar, total_diamonds, currency, pickup, status, payment_method, created_at, archived_at
+                            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())`,
+                            [order.id, order.buyer, order.seller, order.items, order.total_ar, order.total_diamonds, order.currency, order.pickup, 'cancelled', order.payment_method, order.created_at]
+                        );
+                        await client.query(`DELETE FROM orders WHERE id = $1`, [orderId]);
                         break;
                 }
 
-                await client.query(
-                    `UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2`,
-                    [status, orderId]
-                );
+                // Если статус не completed и не cancelled — обновляем статус (но они уже обработаны выше и удалены)
+                if (status !== 'completed' && status !== 'cancelled') {
+                    await client.query(
+                        `UPDATE orders SET status = $1, updated_at = NOW() WHERE id = $2`,
+                        [status, orderId]
+                    );
+                }
 
                 await client.query('COMMIT');
                 return res.status(200).json({ success: true });
@@ -535,7 +556,7 @@ export default async function handler(req, res) {
             }
         }
 
-        // ===== АРХИВАЦИЯ СТАРЫХ ЗАКАЗОВ =====
+        // ===== АРХИВАЦИЯ СТАРЫХ ЗАКАЗОВ (больше не нужна, но оставим на всякий случай) =====
         if (action === 'archiveOrders') {
             const client = await pool.connect();
             try {
@@ -950,4 +971,4 @@ export default async function handler(req, res) {
             detail: error.detail,
         });
     }
-                }
+}
