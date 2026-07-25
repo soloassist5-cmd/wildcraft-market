@@ -252,11 +252,24 @@
             font-family: monospace;
         }
 
-        .commission-actions {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin-top: 10px;
+        .withdraw-request-item {
+            background: rgba(251, 191, 36, 0.05);
+            border: 1px solid rgba(251, 191, 36, 0.2);
+            border-radius: var(--radius-sm);
+            padding: 14px 16px;
+            margin-bottom: 10px;
+        }
+        .withdraw-request-item .amount {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--warning);
+        }
+        .withdraw-request-item .seller {
+            font-weight: 600;
+        }
+        .withdraw-request-item .pickup {
+            color: var(--text-secondary);
+            font-size: 13px;
         }
 
         @media (max-width: 768px) {
@@ -452,7 +465,7 @@
             <section class="page" id="page-staff">
                 <div class="page-header">
                     <h1>🏢 Пункт выдачи заказов (ПВЗ)</h1>
-                    <p>Заказы, готовые к выдаче покупателям</p>
+                    <p>Заказы для выдачи и заявки на вывод средств</p>
                 </div>
                 <div id="staffContent">
                     <div class="empty-state">
@@ -889,6 +902,15 @@
         }
         async function forceDeductCommissionDB(seller, amount, actor) {
             return apiCall('forceDeductCommission', null, { seller, amount, actor });
+        }
+        async function getWithdrawRequests() {
+            return apiCall('getWithdrawRequests');
+        }
+        async function processWithdrawRequest(requestId, actor) {
+            return apiCall('processWithdrawRequest', null, { requestId, actor });
+        }
+        async function cancelWithdrawRequest(requestId, actor) {
+            return apiCall('cancelWithdrawRequest', null, { requestId, actor });
         }
 
         function generateId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -1578,6 +1600,35 @@
         });
 
         // ============================================================
+        // ОБРАБОТКА ЗАЯВКИ НА ВЫВОД (STAFF/ADMIN)
+        // ============================================================
+        window.handleWithdrawRequest = async function(requestId, action) {
+            const user = getCurrentUser();
+            if (!user || (user.role !== 'staff' && user.role !== 'admin')) {
+                showToast('Только сотрудник ПВЗ или администратор может обрабатывать заявки!', 'error');
+                return;
+            }
+
+            try {
+                let result;
+                if (action === 'approve') {
+                    if (!confirm('Подтвердить выдачу средств по этой заявке?')) return;
+                    result = await processWithdrawRequest(requestId, user.username);
+                    if (result && result.error) throw new Error(result.error);
+                    showToast('✅ Заявка на вывод подтверждена! Средства списаны с продавца.', 'success');
+                } else if (action === 'cancel') {
+                    if (!confirm('Отменить заявку на вывод?')) return;
+                    result = await cancelWithdrawRequest(requestId, user.username);
+                    if (result && result.error) throw new Error(result.error);
+                    showToast('❌ Заявка на вывод отменена.', 'warning');
+                }
+                renderUI();
+            } catch (error) {
+                showToast('❌ Ошибка: ' + error.message, 'error');
+            }
+        };
+
+        // ============================================================
         // ПРОСМОТР ПРОФИЛЯ ПРОДАВЦА (АДМИН)
         // ============================================================
         window.viewSellerProfile = async function(username) {
@@ -2027,7 +2078,7 @@
         }
 
         // ============================================================
-        // СОТРУДНИК ПВЗ
+        // ПВЗ (STAFF) — С ЗАЯВКАМИ НА ВЫВОД
         // ============================================================
         async function renderStaff() {
             const container = document.getElementById('staffContent');
@@ -2037,47 +2088,83 @@
                     <div class="empty-state">
                         <i class="fas fa-warehouse"></i>
                         <h3>Только для сотрудников ПВЗ</h3>
-                        <p>Войдите как сотрудник ПВЗ, чтобы видеть заказы для выдачи</p>
+                        <p>Войдите как сотрудник ПВЗ, чтобы видеть заказы для выдачи и заявки на вывод</p>
                     </div>
                 `;
                 return;
             }
             try {
-                const data = await getStaffOrders();
-                if (data.total === 0) {
-                    container.innerHTML = `
+                const ordersData = await getStaffOrders();
+                const withdrawData = await getWithdrawRequests();
+                const pendingWithdraws = withdrawData.filter(w => w.status === 'pending');
+
+                let html = '';
+
+                // ---- ЗАЯВКИ НА ВЫВОД СРЕДСТВ ----
+                if (pendingWithdraws.length > 0) {
+                    html += `
+                        <div style="margin-bottom:24px;">
+                            <h3 style="margin-bottom:16px;">💳 Заявки на вывод средств (${pendingWithdraws.length})</h3>
+                            ${pendingWithdraws.map(w => `
+                                <div class="withdraw-request-item">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                                        <div>
+                                            <div class="seller">👤 ${w.seller}</div>
+                                            <div class="amount">💰 ${w.amount} АР</div>
+                                            <div class="pickup">📍 ${w.pickup}</div>
+                                            <div style="font-size:12px;color:var(--text-secondary);">📅 ${new Date(w.created_at).toLocaleString()}</div>
+                                        </div>
+                                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                            <button class="btn btn-success btn-sm" onclick="handleWithdrawRequest('${w.id}', 'approve')">
+                                                <i class="fas fa-check"></i> Выдать
+                                            </button>
+                                            <button class="btn btn-danger btn-sm" onclick="handleWithdrawRequest('${w.id}', 'cancel')">
+                                                <i class="fas fa-times"></i> Отменить
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+
+                // ---- ЗАКАЗЫ ДЛЯ ВЫДАЧИ ----
+                if (ordersData.total === 0) {
+                    html += `
                         <div class="empty-state">
                             <i class="fas fa-warehouse"></i>
                             <h3>Нет заказов для выдачи</h3>
                             <p>Все заказы уже выданы или ещё не доставлены в ПВЗ</p>
                         </div>
                     `;
-                    return;
-                }
-                let html = `<p style="color:var(--text-secondary);margin-bottom:16px;">📦 Заказов для выдачи: ${data.total}</p>`;
-                for (const [pickup, orders] of Object.entries(data.grouped)) {
-                    html += `
-                        <div class="staff-order-group">
-                            <div class="pickup-title">📍 Пункт выдачи: ${pickup}</div>
-                            ${orders.map(o => `
-                                <div class="staff-order-item-inner">
-                                    <div>
-                                        <div><strong>#${o.id}</strong> · 👤 ${o.buyer} → 🏪 ${o.seller}</div>
-                                        <div style="font-size:12px;color:var(--text-secondary);">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
-                                        <div style="font-size:12px;color:var(--text-secondary);">💰 ${o.total_ar} АР · ${o.payment_method === 'balance' ? '💳 Оплачено' : '💵 Оплата при получении'}</div>
-                                        <div style="font-size:12px;color:var(--secondary);"><i class="fas fa-box"></i> Готов к выдаче</div>
+                } else {
+                    html += `<h3 style="margin-bottom:16px;">📦 Заказы для выдачи (${ordersData.total})</h3>`;
+                    for (const [pickup, orders] of Object.entries(ordersData.grouped)) {
+                        html += `
+                            <div class="staff-order-group">
+                                <div class="pickup-title">📍 Пункт выдачи: ${pickup}</div>
+                                ${orders.map(o => `
+                                    <div class="staff-order-item-inner">
+                                        <div>
+                                            <div><strong>#${o.id}</strong> · 👤 ${o.buyer} → 🏪 ${o.seller}</div>
+                                            <div style="font-size:12px;color:var(--text-secondary);">${o.items.map(i => `${i.icon || '📦'} ${i.name} × ${i.quantity}`).join(', ')}</div>
+                                            <div style="font-size:12px;color:var(--text-secondary);">💰 ${o.total_ar} АР · ${o.payment_method === 'balance' ? '💳 Оплачено' : '💵 Оплата при получении'}</div>
+                                            <div style="font-size:12px;color:var(--secondary);"><i class="fas fa-box"></i> Готов к выдаче</div>
+                                        </div>
+                                        <button class="btn btn-success btn-sm" onclick="window.updateOrderStatus('${o.id}', 'completed', this)">
+                                            <i class="fas fa-hand-holding"></i> Выдать заказ
+                                        </button>
                                     </div>
-                                    <button class="btn btn-success btn-sm" onclick="window.updateOrderStatus('${o.id}', 'completed', this)">
-                                        <i class="fas fa-hand-holding"></i> Выдать заказ
-                                    </button>
-                                </div>
-                            `).join('')}
-                        </div>
-                    `;
+                                `).join('')}
+                            </div>
+                        `;
+                    }
                 }
+
                 container.innerHTML = html;
             } catch (error) {
-                console.error('Ошибка загрузки заказов для ПВЗ:', error);
+                console.error('Ошибка загрузки ПВЗ:', error);
                 container.innerHTML =
                     `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>Ошибка загрузки</h3><p>${error.message}</p></div>`;
             }
@@ -2131,7 +2218,7 @@
             transfer_out: { icon: '📤', label: 'Перевод отправлен' },
             transfer_in: { icon: '📥', label: 'Перевод получен' },
             withdraw: { icon: '🏧', label: 'Вывод средств' },
-            withdraw_payout: { icon: '🏧', label: 'Выдача при выводе' },
+            withdraw_request: { icon: '📝', label: 'Заявка на вывод' },
             balance_voided: { icon: '🔒', label: 'Аннулирование баланса' },
             balance_reset: { icon: '🚫', label: 'Обнуление баланса (админ)' },
             delivery_fee: { icon: '🚚', label: 'Доставка' },
@@ -2220,7 +2307,7 @@
             try {
                 const result = await withdrawBalanceDB(user.username, amount, pickup);
                 if (!result || result.error) throw new Error((result && result.error) || 'Ошибка вывода средств');
-                showToast(`✅ Заявка на вывод ${amount} АР оформлена. Получите средства на ПВЗ «${pickup}»`,
+                showToast(`✅ Заявка на вывод ${amount} АР оформлена. Ожидайте подтверждения в ПВЗ «${pickup}»`,
                     'success');
                 renderUI();
             } catch (error) {
@@ -3548,6 +3635,9 @@
             if (user.role === 'staff' || user.role === 'admin') {
                 const orders = await getOrders();
                 const readyOrders = orders.filter(o => o.status === 'ready_for_pickup');
+                const withdrawData = await getWithdrawRequests();
+                const pendingWithdraws = withdrawData.filter(w => w.status === 'pending');
+
                 html += `
                     <div class="wallet-grid">
                         <div class="profile-card">
@@ -3560,6 +3650,30 @@
                             </form>
                         </div>
                     </div>
+                    ${pendingWithdraws.length > 0 ? `
+                        <div class="profile-card" style="border-color:rgba(251,191,36,0.2);">
+                            <div class="card-title" style="color:var(--warning);">💳 Заявки на вывод (${pendingWithdraws.length})</div>
+                            ${pendingWithdraws.map(w => `
+                                <div class="staff-order-item" style="border-color:rgba(251,191,36,0.2);">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                                        <div>
+                                            <div><strong>👤 ${w.seller}</strong></div>
+                                            <div style="font-size:16px;font-weight:700;color:var(--warning);">💰 ${w.amount} АР</div>
+                                            <div style="font-size:12px;color:var(--text-secondary);">📍 ${w.pickup} · ${new Date(w.created_at).toLocaleString()}</div>
+                                        </div>
+                                        <div style="display:flex;gap:8px;">
+                                            <button class="btn btn-success btn-sm" onclick="handleWithdrawRequest('${w.id}', 'approve')">
+                                                <i class="fas fa-check"></i> Выдать
+                                            </button>
+                                            <button class="btn btn-danger btn-sm" onclick="handleWithdrawRequest('${w.id}', 'cancel')">
+                                                <i class="fas fa-times"></i> Отменить
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
                     <div class="profile-card">
                         <div class="card-title"><i class="fas fa-box-open"></i> Заказы, готовые к выдаче (${readyOrders.length})</div>
                 `;
@@ -3603,6 +3717,9 @@
                                 <input type="number" id="withdrawAmount" placeholder="Сумма АР" min="1" step="1" max="${balance}" required />
                                 <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-hand-holding-usd"></i> Вывести</button>
                             </form>
+                            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">
+                                <i class="fas fa-info-circle"></i> После подачи заявки ожидайте подтверждения в ПВЗ.
+                            </div>
                         </div>
                     `;
                 }
@@ -3721,9 +3838,7 @@
                 console.log('🚚 Курьер: courier / Courier2026!');
                 console.log('💎 1 АР = 3 алмаза');
                 console.log('💰 Комиссия: ' + COMMISSION_PERCENT + '% накапливается, списывается при достижении 10% от баланса');
-                console.log(
-                    '📋 Горячие клавиши: Ctrl+1(каталог) Ctrl+2(корзина) Ctrl+3(профиль) Ctrl+4(избранное) Ctrl+5(правила)'
-                );
+                console.log('📋 Горячие клавиши: Ctrl+1(каталог) Ctrl+2(корзина) Ctrl+3(профиль) Ctrl+4(избранное) Ctrl+5(правила)');
             } catch (error) {
                 console.error('Ошибка запуска:', error);
                 const realReason = error?.message || 'неизвестная ошибка';
