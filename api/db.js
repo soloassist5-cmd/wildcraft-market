@@ -142,6 +142,17 @@ async function ensureSchema() {
         updated_at TIMESTAMP DEFAULT NOW()
     )`);
 
+    await pool.query(`CREATE TABLE IF NOT EXISTS withdraw_requests (
+        id SERIAL PRIMARY KEY,
+        seller TEXT NOT NULL REFERENCES users(username) ON DELETE CASCADE,
+        amount INTEGER NOT NULL,
+        pickup TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT NOW(),
+        processed_at TIMESTAMP,
+        processed_by TEXT
+    )`);
+
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_buyer ON orders(buyer)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_seller ON orders(seller)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)`);
@@ -150,11 +161,16 @@ async function ensureSchema() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_products_seller ON products(seller)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_products_status ON products(status)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_transactions_username ON transactions(username)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_withdraw_requests_seller ON withdraw_requests(seller)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_withdraw_requests_status ON withdraw_requests(status)`);
 
     schemaReady = true;
     console.log('✅ Схема БД инициализирована');
 }
 
+// ============================================================
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+// ============================================================
 async function adjustBalance(client, username, delta) {
     await client.query(
         `INSERT INTO balances (username, balance) VALUES ($1, $2)
@@ -223,14 +239,9 @@ async function processPendingCommission(client, seller) {
     // 10% от баланса
     const threshold = Math.floor(currentBalance * COMMISSION_PERCENT / 100);
 
-    // Если накоплено меньше 10% от баланса — ничего не делаем
     if (pendingAmount < threshold || pendingAmount === 0) return 0;
 
-    // Списать нужно не больше накопленного, но не больше баланса (чтобы не уходить в минус автоматически)
-    // Но если баланс меньше накопленного — списываем всё, что есть
     const toDeduct = Math.min(pendingAmount, currentBalance);
-
-    // Если списывать нечего — выходим
     if (toDeduct === 0) return 0;
 
     const remaining = pendingAmount - toDeduct;
@@ -280,7 +291,6 @@ async function forceDeductCommission(client, seller, amount, actor) {
         );
     }
 
-    // Списываем с продавца (даже если баланс станет отрицательным)
     await adjustBalance(client, seller, -toDeduct);
     await logTransaction(client, seller, 'commission_forced', -toDeduct,
         `Принудительное списание комиссии администратором ${actor} (${toDeduct} АР)`);
@@ -290,6 +300,71 @@ async function forceDeductCommission(client, seller, amount, actor) {
         `Получена комиссия от ${seller} (${toDeduct} АР) — принудительно`);
 
     return toDeduct;
+}
+
+// ============================================================
+// ВЫВОД СРЕДСТВ — СОЗДАНИЕ ЗАЯВКИ
+// ============================================================
+async function createWithdrawRequest(client, seller, amount, pickup) {
+    await client.query(
+        `INSERT INTO withdraw_requests (seller, amount, pickup, status, created_at)
+         VALUES ($1, $2, $3, 'pending', NOW())`,
+        [seller, amount, pickup]
+    );
+}
+
+// ============================================================
+// ПОДТВЕРЖДЕНИЕ ВЫВОДА СРЕДСТВ (STAFF/ADMIN)
+// ============================================================
+async function processWithdrawRequest(client, requestId, actor) {
+    const reqRes = await client.query(
+        `SELECT * FROM withdraw_requests WHERE id = $1 AND status = 'pending' FOR UPDATE`,
+        [requestId]
+    );
+    if (reqRes.rows.length === 0) {
+        throw new Error('Заявка не найдена или уже обработана');
+    }
+    const req = reqRes.rows[0];
+
+    const balRes = await client.query('SELECT balance FROM balances WHERE username = $1 FOR UPDATE', [req.seller]);
+    const currentBalance = Number(balRes.rows[0]?.balance || 0);
+
+    if (currentBalance < req.amount) {
+        throw new Error(`Недостаточно средств на балансе продавца (нужно: ${req.amount}, доступно: ${currentBalance})`);
+    }
+
+    await adjustBalance(client, req.seller, -req.amount);
+    await logTransaction(client, req.seller, 'withdraw', -req.amount,
+        `Вывод средств через ПВЗ ${req.pickup} (заявка #${requestId})`);
+
+    await client.query(
+        `UPDATE withdraw_requests 
+         SET status = 'completed', processed_at = NOW(), processed_by = $1 
+         WHERE id = $2`,
+        [actor, requestId]
+    );
+
+    return req;
+}
+
+// ============================================================
+// ОТМЕНА ЗАЯВКИ НА ВЫВОД (STAFF/ADMIN)
+// ============================================================
+async function cancelWithdrawRequest(client, requestId, actor) {
+    const reqRes = await client.query(
+        `SELECT * FROM withdraw_requests WHERE id = $1 AND status = 'pending' FOR UPDATE`,
+        [requestId]
+    );
+    if (reqRes.rows.length === 0) {
+        throw new Error('Заявка не найдена или уже обработана');
+    }
+    await client.query(
+        `UPDATE withdraw_requests 
+         SET status = 'cancelled', processed_at = NOW(), processed_by = $1 
+         WHERE id = $2`,
+        [actor, requestId]
+    );
+    return reqRes.rows[0];
 }
 
 // ============================================================
@@ -324,13 +399,17 @@ export default async function handler(req, res) {
                 const result = await pool.query('SELECT * FROM pending_commissions');
                 return res.status(200).json(result.rows);
             }
+            if (table === 'withdraw_requests') {
+                const result = await pool.query('SELECT * FROM withdraw_requests ORDER BY created_at DESC');
+                return res.status(200).json(result.rows);
+            }
             const result = await pool.query(`SELECT * FROM ${table}`);
             return res.status(200).json(result.rows);
         }
 
         // ===== GET ALL =====
         if (action === 'getAll') {
-            const [users, shops, products, carts, orders, pickupPoints, bannedUsers, rules, wishlist, balances, transactions, pendingCommissions] = await Promise.all([
+            const [users, shops, products, carts, orders, pickupPoints, bannedUsers, rules, wishlist, balances, transactions, pendingCommissions, withdrawRequests] = await Promise.all([
                 pool.query('SELECT * FROM users'),
                 pool.query('SELECT * FROM shops'),
                 pool.query('SELECT * FROM products'),
@@ -343,6 +422,7 @@ export default async function handler(req, res) {
                 pool.query('SELECT * FROM balances'),
                 pool.query('SELECT * FROM transactions ORDER BY created_at DESC LIMIT 500'),
                 pool.query('SELECT * FROM pending_commissions'),
+                pool.query('SELECT * FROM withdraw_requests ORDER BY created_at DESC'),
             ]);
             return res.status(200).json({
                 users: users.rows,
@@ -357,6 +437,7 @@ export default async function handler(req, res) {
                 balances: balances.rows,
                 transactions: transactions.rows,
                 pendingCommissions: pendingCommissions.rows,
+                withdrawRequests: withdrawRequests.rows,
             });
         }
 
@@ -451,6 +532,94 @@ export default async function handler(req, res) {
             } catch (err) {
                 await client.query('ROLLBACK');
                 throw err;
+            } finally {
+                client.release();
+            }
+        }
+
+        // ===== ВЫВОД СРЕДСТВ — СОЗДАНИЕ ЗАЯВКИ =====
+        if (action === 'withdrawBalance') {
+            const { username, amount, pickup } = data || {};
+            const amt = Math.floor(Number(amount));
+            if (!username || !amt || amt <= 0 || !pickup) {
+                return res.status(400).json({ error: 'username, amount и pickup обязательны, amount должен быть положительным целым' });
+            }
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+                const balRes = await client.query('SELECT balance FROM balances WHERE username = $1 FOR UPDATE', [username]);
+                const currentBalance = Number(balRes.rows[0]?.balance || 0);
+                if (currentBalance < amt) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({ error: 'Недостаточно средств для вывода' });
+                }
+                await createWithdrawRequest(client, username, amt, pickup);
+                await logTransaction(client, username, 'withdraw_request', amt,
+                    `Создана заявка на вывод ${amt} АР через ПВЗ ${pickup}`);
+                await client.query('COMMIT');
+                return res.status(200).json({
+                    success: true,
+                    message: `Заявка на вывод ${amt} АР создана. Ожидайте подтверждения в ПВЗ.`
+                });
+            } catch (err) {
+                await client.query('ROLLBACK');
+                throw err;
+            } finally {
+                client.release();
+            }
+        }
+
+        // ===== ПОЛУЧИТЬ ЗАЯВКИ НА ВЫВОД =====
+        if (action === 'getWithdrawRequests') {
+            const result = await pool.query(
+                `SELECT * FROM withdraw_requests ORDER BY created_at DESC`
+            );
+            return res.status(200).json(result.rows);
+        }
+
+        // ===== ПОДТВЕРДИТЬ ЗАЯВКУ НА ВЫВОД (STAFF/ADMIN) =====
+        if (action === 'processWithdrawRequest') {
+            const { requestId, actor } = data || {};
+            if (!requestId || !actor) {
+                return res.status(400).json({ error: 'requestId и actor обязательны' });
+            }
+            const actorRes = await pool.query('SELECT role FROM users WHERE username = $1', [actor]);
+            if (actorRes.rows[0]?.role !== 'staff' && actorRes.rows[0]?.role !== 'admin') {
+                return res.status(403).json({ error: 'Только сотрудник ПВЗ или администратор может подтверждать вывод' });
+            }
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+                const result = await processWithdrawRequest(client, requestId, actor);
+                await client.query('COMMIT');
+                return res.status(200).json({ success: true, request: result });
+            } catch (err) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: err.message });
+            } finally {
+                client.release();
+            }
+        }
+
+        // ===== ОТМЕНИТЬ ЗАЯВКУ НА ВЫВОД (STAFF/ADMIN) =====
+        if (action === 'cancelWithdrawRequest') {
+            const { requestId, actor } = data || {};
+            if (!requestId || !actor) {
+                return res.status(400).json({ error: 'requestId и actor обязательны' });
+            }
+            const actorRes = await pool.query('SELECT role FROM users WHERE username = $1', [actor]);
+            if (actorRes.rows[0]?.role !== 'staff' && actorRes.rows[0]?.role !== 'admin') {
+                return res.status(403).json({ error: 'Только сотрудник ПВЗ или администратор может отменять вывод' });
+            }
+            const client = await pool.connect();
+            try {
+                await client.query('BEGIN');
+                const result = await cancelWithdrawRequest(client, requestId, actor);
+                await client.query('COMMIT');
+                return res.status(200).json({ success: true, request: result });
+            } catch (err) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: err.message });
             } finally {
                 client.release();
             }
@@ -641,8 +810,6 @@ export default async function handler(req, res) {
                             await addPendingCommission(client, order.seller, commission);
                             await logTransaction(client, order.seller, 'commission_pending', commission,
                                 `Накоплена комиссия с заказа #${orderId} (${commission} АР)`);
-
-                            // Проверяем, не пора ли списать
                             await processPendingCommission(client, order.seller);
                         }
 
@@ -655,7 +822,7 @@ export default async function handler(req, res) {
 
                         await client.query(`UPDATE orders SET delivered_at = NOW() WHERE id = $1`, [orderId]);
 
-                        // Архивация
+                        // АРХИВАЦИЯ
                         await client.query(
                             `INSERT INTO orders_archive (
                                 id, buyer, seller, items, total_ar, total_diamonds, currency, pickup, status, payment_method, created_at, archived_at
@@ -694,7 +861,7 @@ export default async function handler(req, res) {
                             await adjustBalance(client, order.buyer, Number(order.total_ar));
                             await logTransaction(client, order.buyer, 'refund', Number(order.total_ar), `Возврат за отменённый заказ #${orderId}`);
                         }
-                        // Архивация отменённого заказа
+                        // АРХИВАЦИЯ ОТМЕНЁННОГО
                         await client.query(
                             `INSERT INTO orders_archive (
                                 id, buyer, seller, items, total_ar, total_diamonds, currency, pickup, status, payment_method, created_at, archived_at
@@ -804,8 +971,6 @@ export default async function handler(req, res) {
                         await addPendingCommission(client, seller, commission);
                         await logTransaction(client, seller, 'commission_pending', commission,
                             `Накоплена комиссия с заказа(ов): ${createdOrders.join(', ')} (${commission} АР)`);
-
-                        // Проверяем, не пора ли списать
                         await processPendingCommission(client, seller);
                     }
                 }
@@ -931,43 +1096,6 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // ===== ВЫВОД СРЕДСТВ =====
-        if (action === 'withdrawBalance') {
-            const { username, amount, pickup } = data || {};
-            const amt = Math.floor(Number(amount));
-            if (!username || !amt || amt <= 0) {
-                return res.status(400).json({ error: 'username и amount обязательны, amount должен быть положительным целым' });
-            }
-            const client = await pool.connect();
-            try {
-                await client.query('BEGIN');
-                const balRes = await client.query('SELECT balance FROM balances WHERE username = $1 FOR UPDATE', [username]);
-                const currentBalance = Number(balRes.rows[0]?.balance || 0);
-                if (currentBalance < amt) {
-                    await client.query('ROLLBACK');
-                    return res.status(400).json({ error: 'Недостаточно средств для вывода' });
-                }
-                await adjustBalance(client, username, -amt);
-                await adjustBalance(client, 'staff', amt);
-                await logTransaction(client, username, 'withdraw', -amt, `Вывод средств через ПВЗ${pickup ? ' (' + pickup + ')' : ''}`);
-                await logTransaction(client, 'staff', 'withdraw_payout', amt, `Выдача средств продавцу ${username}${pickup ? ' (' + pickup + ')' : ''}`);
-
-                // Проверяем комиссию после вывода (если продавец)
-                const userRes = await client.query('SELECT role FROM users WHERE username = $1', [username]);
-                if (userRes.rows[0]?.role === 'seller') {
-                    await processPendingCommission(client, username);
-                }
-
-                await client.query('COMMIT');
-            } catch (err) {
-                await client.query('ROLLBACK');
-                throw err;
-            } finally {
-                client.release();
-            }
-            return res.status(200).json({ success: true });
-        }
-
         // ===== БЛОКИРОВКА =====
         if (action === 'toggleBlockUser') {
             const { username, blocked } = data || {};
@@ -986,7 +1114,6 @@ export default async function handler(req, res) {
                         await client.query('UPDATE balances SET balance = 0 WHERE username = $1', [username]);
                         await logTransaction(client, username, 'balance_voided', -currentBalance, 'Баланс аннулирован при блокировке аккаунта');
                     }
-                    // Очищаем накопленную комиссию
                     await client.query('DELETE FROM pending_commissions WHERE seller = $1', [username]);
                 }
                 await client.query('COMMIT');
@@ -1022,7 +1149,6 @@ export default async function handler(req, res) {
                     await client.query('UPDATE balances SET balance = 0 WHERE username = $1', [username]);
                     await logTransaction(client, username, 'balance_reset', -currentBalance, `Баланс обнулён администратором (${actor})`);
                 }
-                // Очищаем накопленную комиссию
                 await client.query('DELETE FROM pending_commissions WHERE seller = $1', [username]);
                 await client.query('COMMIT');
             } catch (err) {
@@ -1135,6 +1261,22 @@ export default async function handler(req, res) {
                     );
                 }
             }
+            if (table === 'withdraw_requests') {
+                for (const wr of data) {
+                    await pool.query(
+                        `INSERT INTO withdraw_requests (id, seller, amount, pickup, status, created_at, processed_at, processed_by)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                         ON CONFLICT (id) DO UPDATE SET
+                             seller = EXCLUDED.seller,
+                             amount = EXCLUDED.amount,
+                             pickup = EXCLUDED.pickup,
+                             status = EXCLUDED.status,
+                             processed_at = EXCLUDED.processed_at,
+                             processed_by = EXCLUDED.processed_by`,
+                        [wr.id, wr.seller, wr.amount, wr.pickup, wr.status || 'pending', wr.created_at || new Date(), wr.processed_at || null, wr.processed_by || null]
+                    );
+                }
+            }
             return res.status(200).json({ success: true });
         }
 
@@ -1150,8 +1292,8 @@ export default async function handler(req, res) {
                 const client = await pool.connect();
                 try {
                     await client.query('BEGIN');
-                    // Удаляем все связанные записи
                     await client.query('DELETE FROM pending_commissions WHERE seller = $1', [id]);
+                    await client.query('DELETE FROM withdraw_requests WHERE seller = $1', [id]);
                     await client.query('DELETE FROM users WHERE username = $1', [id]);
                     await client.query('COMMIT');
                 } catch (err) {
@@ -1160,6 +1302,9 @@ export default async function handler(req, res) {
                 } finally {
                     client.release();
                 }
+            }
+            if (table === 'withdraw_requests') {
+                await pool.query('DELETE FROM withdraw_requests WHERE id = $1', [id]);
             }
             return res.status(200).json({ success: true });
         }
