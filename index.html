@@ -1698,7 +1698,7 @@
                             </div>
                         </div>
                         <div style="margin-top:12px;">
-                            <span class="ip-display"><i class="fas fa-network-wired"></i> IP: ${userIP}</span>
+                            <span class="ip-display"><i class="fas fa-network-wired"></i> IP: ${data.user?.ip || 'неизвестен'}</span>
                         </div>
                         ${commissionHtml}
                     </div>
@@ -1838,7 +1838,7 @@
                             </div>
                         </div>
                         <div style="margin-top:12px;">
-                            <span class="ip-display"><i class="fas fa-network-wired"></i> IP: ${userIP}</span>
+                            <span class="ip-display"><i class="fas fa-network-wired"></i> IP: ${data.user?.ip || 'неизвестен'}</span>
                         </div>
                     </div>
                 `;
@@ -3351,7 +3351,7 @@
                                         <div style="font-weight:600;">🛒 ${b.username}</div>
                                         <div style="font-size:13px;color:var(--secondary);margin-top:2px;">🟣 Баланс: ${buyerBalance} АР</div>
                                         <div style="margin-top:4px;">
-                                            <span class="ip-display"><i class="fas fa-network-wired"></i> IP: ${userIP}</span>
+                                            <span class="ip-display"><i class="fas fa-network-wired"></i> IP: ${b.ip || 'неизвестен'}</span>
                                         </div>
                                     </div>
                                     <button class="btn btn-danger btn-sm" onclick="adminResetBalance('${b.username}')" ${buyerBalance === 0 ? 'disabled' : ''}><i class="fas fa-ban"></i> Обнулить баланс</button>
@@ -3838,6 +3838,12 @@
         (async function start() {
             try {
                 await initData();
+                // ИСПРАВЛЕНО: кнопки категорий в HTML изначально шли без
+                // onclick (просто статичная вёрстка-заглушка). Рабочая
+                // версия с обработчиками собиралась в renderFilters(), но
+                // эту функцию никто не вызывал — кнопки жали, и ничего не
+                // происходило. Вызываем один раз при старте.
+                await renderFilters();
                 await renderUI();
                 console.log('⚡ WildCraft Market запущен!');
                 console.log('👑 Админ: Admin / Admin2026!');
