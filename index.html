@@ -1150,35 +1150,51 @@
         // ============================================================
         // МАГАЗИНЫ
         // ============================================================
-        document.getElementById('shopForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const user = getCurrentUser();
-            if (!user || user.role !== 'seller') {
-                showToast('Только продавцы могут создавать магазины!', 'error');
-                return;
-            }
-            if (await isUserBlocked(user.username)) {
-                showToast('❌ Ваш аккаунт заблокирован!', 'error');
-                return;
-            }
-            const name = document.getElementById('shopName').value.trim();
-            const desc = document.getElementById('shopDesc').value.trim();
-            if (!name) { showToast('Введите название магазина!', 'error'); return; }
-            const shops = await getShops();
-            if (shops.find(s => s.owner === user.username)) {
-                showToast('У вас уже есть магазин!', 'warning');
-                return;
-            }
-            const shop = {
-                id: generateId(),
-                owner: user.username,
-                name,
-                description: desc || 'Магазин без описания',
-                approved: false,
-                pending: true,
-                rating: 0,
-                review_count: 0
-            };
+       document.getElementById('shopForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const user = getCurrentUser();
+    if (!user || user.role !== 'seller') {
+        showToast('Только продавцы могут создавать магазины!', 'error');
+        return;
+    }
+    if (await isUserBlocked(user.username)) {
+        showToast('❌ Ваш аккаунт заблокирован!', 'error');
+        return;
+    }
+    const name = document.getElementById('shopName').value.trim();
+    const desc = document.getElementById('shopDesc').value.trim();
+    if (!name) { showToast('Введите название магазина!', 'error'); return; }
+    const shops = await getShops();
+    if (shops.find(s => s.owner === user.username)) {
+        showToast('У вас уже есть магазин!', 'warning');
+        return;
+    }
+    const shop = {
+        id: generateId(),
+        owner: user.username,
+        name,
+        description: desc || 'Магазин без описания',
+        approved: false,
+        pending: true,
+        rating: 0,
+        review_count: 0
+    };
+    console.log('🏪 СОЗДАЁМ МАГАЗИН:', shop); // ЛОГ!
+    shops.push(shop);
+    await setShops(shops);
+    const users = await getUsers();
+    const uIdx = users.findIndex(u => u.username === user.username);
+    if (uIdx !== -1) {
+        users[uIdx].shop_id = shop.id;
+        users[uIdx].pending = true;
+        await setUsers(users);
+    }
+    clearApiCache(); // ОБЯЗАТЕЛЬНО!
+    document.getElementById('shopModal').classList.remove('open');
+    document.getElementById('shopForm').reset();
+    showToast('✅ Магазин "' + name + '" создан! Ожидайте одобрения.', 'success');
+    renderUI();
+});
             shops.push(shop);
             await setShops(shops);
             const users = await getUsers();
