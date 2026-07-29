@@ -3151,12 +3151,17 @@
                 getPickupPoints(),
                 getPendingCommissions()
             ]);
-
+        
+            
             const userData = users.find(u => u.username === user.username);
             const shop = shops.find(s => s.owner === user.username && s.approved);
             const myProducts = shop ? allProducts.filter(p => p.shop_id === shop.id) : [];
             const buyerOrders = orders.filter(o => o.buyer === user.username);
             const sellerOrders = orders.filter(o => o.seller === user.username);
+            // ЛОГИРУЕМ для отладки
+console.log('🏪 Все магазины:', shops);
+console.log('⏳ Ожидающие заявки (pending && !approved):', shops.filter(s => s.pending && !s.approved));
+const pendingShops = shops.filter(s => s.pending && !s.approved);
             const pendingShops = shops.filter(s => s.pending && !s.approved);
             const isBlocked = bannedUsers.includes(user.username);
             const pendingProducts = allProducts.filter(p => p.status === 'pending');
