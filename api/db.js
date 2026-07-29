@@ -28,6 +28,11 @@ async function ensureSchema() {
         pending BOOLEAN DEFAULT FALSE,
         blocked BOOLEAN DEFAULT FALSE
     )`);
+    // IP фиксируется один раз при регистрации (см. ниже, в 'set'→'users') —
+    // серверная сторона, а не то, что прислал клиент, иначе значение легко
+    // подделать. Добавляем колонку отдельно на случай, если таблица users
+    // уже существовала до этого изменения.
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ip TEXT`);
 
     await pool.query(`CREATE TABLE IF NOT EXISTS shops (
         id TEXT PRIMARY KEY,
@@ -386,6 +391,14 @@ export default async function handler(req, res) {
     try {
         await ensureSchema();
         const { action, table, data, id } = req.body;
+
+        // Реальный IP клиента — из заголовка, который проставляет сама
+        // Vercel (x-forwarded-for: <клиент>, <прокси1>, ...), первый
+        // элемент — настоящий IP браузера. НЕ берём IP от клиента напрямую
+        // (это тривиально подделать), только из заголовков запроса.
+        const requestIp = (
+            (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '')
+        ).toString().split(',')[0].trim() || 'unknown';
 
         console.log('📥 Запрос:', action, table, id);
 
@@ -1165,8 +1178,8 @@ export default async function handler(req, res) {
             if (table === 'users') {
                 for (const user of data) {
                     await pool.query(
-                        `INSERT INTO users (username, password, role, shop_id, approved, pending, blocked)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        `INSERT INTO users (username, password, role, shop_id, approved, pending, blocked, ip)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                          ON CONFLICT (username) DO UPDATE SET
                              password = EXCLUDED.password,
                              role = EXCLUDED.role,
@@ -1174,7 +1187,12 @@ export default async function handler(req, res) {
                              approved = EXCLUDED.approved,
                              pending = EXCLUDED.pending,
                              blocked = EXCLUDED.blocked`,
-                        [user.username, user.password, user.role, user.shop_id || null, user.approved || false, user.pending || false, user.blocked || false]
+                        // ip намеренно НЕ в SET выше — значение фиксируется
+                        // только при первом INSERT (регистрации) и не
+                        // перезаписывается IP администратора при
+                        // последующих bulk-обновлениях этого же пользователя
+                        // (например, при одобрении магазина).
+                        [user.username, user.password, user.role, user.shop_id || null, user.approved || false, user.pending || false, user.blocked || false, requestIp]
                     );
                 }
             }
