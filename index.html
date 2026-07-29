@@ -1467,36 +1467,44 @@
             }
         };
 
-        window.approveShop = async function(shopId, approve) {
-            try {
-                const shops = await getShops();
-                const shop = shops.find(s => s.id === shopId);
-                if (!shop) { showToast('Магазин не найден', 'error'); return; }
-                const users = await getUsers();
-                const user = users.find(u => u.username === shop.owner);
-                if (approve) {
-                    shop.approved = true;
-                    shop.pending = false;
-                    if (user) { user.approved = true;
-                        user.pending = false; }
-                    showToast('✅ Магазин "' + shop.name + '" одобрен!', 'success');
-                } else {
-                    const idx = shops.indexOf(shop);
-                    shops.splice(idx, 1);
-                    if (user) { user.shop_id = null;
-                        user.approved = false;
-                        user.pending = false; }
-                    showToast('❌ Магазин отклонён', 'warning');
-                }
-                await setShops(shops);
-                await setUsers(users);
-                renderUI();
-            } catch (error) {
-                console.error('Ошибка одобрения магазина:', error);
-                showToast('❌ Ошибка: ' + error.message, 'error');
-            }
-        };
-
+       window.approveShop = async function(shopId, approve) {
+    console.log('📝 Одобрение магазина:', shopId, 'approve:', approve);
+    try {
+        const shops = await getShops();
+        console.log('📦 Все магазины до изменения:', shops);
+        const shop = shops.find(s => s.id === shopId);
+        if (!shop) { showToast('Магазин не найден', 'error'); return; }
+        console.log('🏪 Найден магазин:', shop);
+        
+        const users = await getUsers();
+        const user = users.find(u => u.username === shop.owner);
+        
+        if (approve) {
+            shop.approved = true;
+            shop.pending = false;
+            if (user) { user.approved = true;
+                user.pending = false; }
+            showToast('✅ Магазин "' + shop.name + '" одобрен!', 'success');
+        } else {
+            // УДАЛЯЕМ магазин при отклонении
+            const idx = shops.indexOf(shop);
+            shops.splice(idx, 1);
+            if (user) { user.shop_id = null;
+                user.approved = false;
+                user.pending = false; }
+            showToast('❌ Магазин отклонён', 'warning');
+        }
+        
+        console.log('📦 Магазины после изменения:', shops);
+        await setShops(shops);
+        await setUsers(users);
+        clearApiCache(); // ОБЯЗАТЕЛЬНО!
+        renderUI();
+    } catch (error) {
+        console.error('Ошибка одобрения магазина:', error);
+        showToast('❌ Ошибка: ' + error.message, 'error');
+    }
+};
         window.approveProduct = async function(productId, approve) {
             try {
                 const products = await getProducts();
