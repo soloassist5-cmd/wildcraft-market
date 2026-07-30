@@ -1127,7 +1127,7 @@ users[uIdx].shop_id = shop.id;
 users[uIdx].pending = true;
 await setUsers(users);
 }
-clearApiCache(); // ОБЯЗАТЕЛЬНО!
+clearApiCache();
 document.getElementById('shopModal').classList.remove('open');
 document.getElementById('shopForm').reset();
 showToast('✅ Магазин "' + name + '" создан! Ожидайте одобрения.', 'success');
@@ -1392,7 +1392,6 @@ showToast('❌ Ошибка: ' + error.message, 'error');
 }
 };
 window.approveShop = async function(shopId, approve) {
-console.log('📝 Одобрение магазина:', shopId, 'approve:', approve);
 try {
 const shops = await getShops();
 const shop = shops.find(s => s.id === shopId);
@@ -1415,7 +1414,7 @@ showToast('❌ Магазин отклонён', 'warning');
 }
 await setShops(shops);
 await setUsers(users);
-clearApiCache(); // ОБЯЗАТЕЛЬНО!
+clearApiCache();
 renderUI();
 } catch (error) {
 console.error('Ошибка одобрения магазина:', error);
@@ -1435,6 +1434,7 @@ product.status = 'rejected';
 showToast('❌ Товар "' + product.name + '" отклонён.', 'warning');
 }
 await setProducts(products);
+clearApiCache();
 renderUI();
 } catch (error) {
 console.error('Ошибка одобрения товара:', error);
