@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import crypto from 'crypto';
+import bcrypt from 'bcrypt';
 
 const pool = new Pool({
     connectionString: process.env.POSTGRES_URL,
@@ -10,6 +11,7 @@ const pool = new Pool({
 
 const ADMIN_USERNAME = 'Admin';
 const COMMISSION_PERCENT = 10;
+const SALT_ROUNDS = 10;
 
 let schemaReady = false;
 
@@ -25,7 +27,6 @@ async function ensureSchema() {
         pending BOOLEAN DEFAULT FALSE,
         blocked BOOLEAN DEFAULT FALSE
     )`);
-    await pool.query(`ALTER TABLE users DROP COLUMN IF EXISTS ip`);
 
     await pool.query(`CREATE TABLE IF NOT EXISTS shops (
         id TEXT PRIMARY KEY,
@@ -162,15 +163,6 @@ async function ensureSchema() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_withdraw_requests_seller ON withdraw_requests(seller)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_withdraw_requests_status ON withdraw_requests(status)`);
 
-    await pool.query(
-        `INSERT INTO users (username, password, role, shop_id, approved, pending, blocked)
-         VALUES
-            ('Admin', 'Admin2026!', 'admin', NULL, TRUE, FALSE, FALSE),
-            ('staff', 'Staff2026!', 'staff', NULL, TRUE, FALSE, FALSE),
-            ('courier', 'Courier2026!', 'courier', NULL, TRUE, FALSE, FALSE)
-         ON CONFLICT (username) DO NOTHING`
-    );
-
     schemaReady = true;
     console.log('✅ Схема БД инициализирована');
 }
@@ -210,8 +202,7 @@ async function deleteAllReferencingRows(client, referencedTable, referencedColum
 
     for (const row of rows) {
         const sql = `DELETE FROM "${row.referencing_table}" WHERE "${row.referencing_column}" = $1`;
-        const result = await client.query(sql, [value]);
-        console.log(`✅ Автоочистка: ${result.rowCount} строк из "${row.referencing_table}".${row.referencing_column}`);
+        await client.query(sql, [value]);
     }
 }
 
@@ -254,7 +245,7 @@ async function processPendingCommission(client, seller) {
 
     await adjustBalance(client, seller, -toDeduct);
     await logTransaction(client, seller, 'commission', -toDeduct,
-        `Списана комиссия за обслуживание (${toDeduct} АР) — накоплено было ${pendingAmount} АР`);
+        `Списана комиссия за обслуживание (${toDeduct} АР)`);
 
     await adjustBalance(client, ADMIN_USERNAME, toDeduct);
     await logTransaction(client, ADMIN_USERNAME, 'commission', toDeduct,
@@ -352,6 +343,216 @@ async function cancelWithdrawRequest(client, requestId, actor) {
     return reqRes.rows[0];
 }
 
+function userToSafeDTO(user) {
+    if (!user) return null;
+    return {
+        username: user.username,
+        role: user.role,
+        shop_id: user.shop_id,
+        approved: user.approved,
+        pending: user.pending,
+        blocked: user.blocked
+    };
+}
+
+function usersToSafeDTO(users) {
+    return users.map(userToSafeDTO);
+}
+
+function shopToDTO(shop) {
+    if (!shop) return null;
+    return {
+        id: shop.id,
+        owner: shop.owner,
+        name: shop.name,
+        description: shop.description,
+        approved: shop.approved,
+        pending: shop.pending,
+        rating: shop.rating,
+        review_count: shop.review_count
+    };
+}
+
+function shopsToDTO(shops) {
+    return shops.map(shopToDTO);
+}
+
+function productToDTO(product) {
+    if (!product) return null;
+    return {
+        id: product.id,
+        shop_id: product.shop_id,
+        shop_name: product.shop_name,
+        category: product.category,
+        name: product.name,
+        icon: product.icon,
+        price_ar: product.price_ar,
+        stock: product.stock,
+        seller: product.seller,
+        status: product.status,
+        rating: product.rating,
+        review_count: product.review_count,
+        sales: product.sales,
+        created_at: product.created_at
+    };
+}
+
+function productsToDTO(products) {
+    return products.map(productToDTO);
+}
+
+function orderToDTO(order) {
+    if (!order) return null;
+    return {
+        id: order.id,
+        buyer: order.buyer,
+        seller: order.seller,
+        items: order.items,
+        total_ar: order.total_ar,
+        total_diamonds: order.total_diamonds,
+        currency: order.currency,
+        pickup: order.pickup,
+        status: order.status,
+        payment_method: order.payment_method,
+        courier: order.courier,
+        delivered_at: order.delivered_at,
+        created_at: order.created_at,
+        updated_at: order.updated_at
+    };
+}
+
+function ordersToDTO(orders) {
+    return orders.map(orderToDTO);
+}
+
+function cartToDTO(cart) {
+    if (!cart) return null;
+    return {
+        user_id: cart.user_id,
+        items: cart.items
+    };
+}
+
+function cartsToDTO(carts) {
+    return carts.map(cartToDTO);
+}
+
+function transactionToDTO(transaction) {
+    if (!transaction) return null;
+    return {
+        id: transaction.id,
+        username: transaction.username,
+        type: transaction.type,
+        amount: transaction.amount,
+        description: transaction.description,
+        created_at: transaction.created_at
+    };
+}
+
+function transactionsToDTO(transactions) {
+    return transactions.map(transactionToDTO);
+}
+
+function balanceToDTO(balance) {
+    if (!balance) return null;
+    return {
+        username: balance.username,
+        balance: balance.balance
+    };
+}
+
+function balancesToDTO(balances) {
+    return balances.map(balanceToDTO);
+}
+
+function pendingCommissionToDTO(pc) {
+    if (!pc) return null;
+    return {
+        seller: pc.seller,
+        amount: pc.amount,
+        updated_at: pc.updated_at
+    };
+}
+
+function pendingCommissionsToDTO(pcs) {
+    return pcs.map(pendingCommissionToDTO);
+}
+
+function withdrawRequestToDTO(wr) {
+    if (!wr) return null;
+    return {
+        id: wr.id,
+        seller: wr.seller,
+        amount: wr.amount,
+        pickup: wr.pickup,
+        status: wr.status,
+        created_at: wr.created_at,
+        processed_at: wr.processed_at,
+        processed_by: wr.processed_by
+    };
+}
+
+function withdrawRequestsToDTO(wrs) {
+    return wrs.map(withdrawRequestToDTO);
+}
+
+function banToDTO(ban) {
+    if (!ban) return null;
+    return {
+        username: ban.username
+    };
+}
+
+function bansToDTO(bans) {
+    return bans.map(banToDTO);
+}
+
+function ruleToDTO(rule) {
+    if (!rule) return null;
+    return {
+        rule_text: rule.rule_text
+    };
+}
+
+function rulesToDTO(rules) {
+    return rules.map(ruleToDTO);
+}
+
+function wishlistToDTO(wishlist) {
+    if (!wishlist) return null;
+    return {
+        user_id: wishlist.user_id,
+        product_id: wishlist.product_id
+    };
+}
+
+function wishlistsToDTO(wishlists) {
+    return wishlists.map(wishlistToDTO);
+}
+
+function getAllSafeDTO(data) {
+    return {
+        users: usersToSafeDTO(data.users || []),
+        shops: shopsToDTO(data.shops || []),
+        products: productsToDTO(data.products || []),
+        carts: cartsToDTO(data.carts || []),
+        orders: ordersToDTO(data.orders || []),
+        pickupPoints: data.pickupPoints || [],
+        bannedUsers: data.bannedUsers || [],
+        rules: data.rules || [],
+        wishlist: wishlistsToDTO(data.wishlist || []),
+        balances: balancesToDTO(data.balances || []),
+        transactions: transactionsToDTO(data.transactions || []),
+        pendingCommissions: pendingCommissionsToDTO(data.pendingCommissions || []),
+        withdrawRequests: withdrawRequestsToDTO(data.withdrawRequests || [])
+    };
+}
+
+function getSafeUserData(user) {
+    if (!user) return null;
+    return userToSafeDTO(user);
+}
+
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
@@ -369,28 +570,64 @@ export default async function handler(req, res) {
         await ensureSchema();
         const { action, table, data, id } = req.body;
 
-        const requestIp = (
-            (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '')
-        ).toString().split(',')[0].trim() || 'unknown';
-
         console.log('📥 Запрос:', action, table, id);
 
         if (action === 'get') {
             if (table === 'transactions') {
                 const result = await pool.query('SELECT * FROM transactions ORDER BY created_at DESC LIMIT 500');
-                return res.status(200).json(result.rows);
+                return res.status(200).json(transactionsToDTO(result.rows));
             }
             if (table === 'pending_commissions') {
                 const result = await pool.query('SELECT * FROM pending_commissions');
-                return res.status(200).json(result.rows);
+                return res.status(200).json(pendingCommissionsToDTO(result.rows));
             }
             if (table === 'withdraw_requests') {
                 const result = await pool.query('SELECT * FROM withdraw_requests ORDER BY created_at DESC');
-                return res.status(200).json(result.rows);
+                return res.status(200).json(withdrawRequestsToDTO(result.rows));
             }
             if (table === 'users') {
-                const result = await pool.query('SELECT username, role, shop_id, approved, pending, blocked FROM users');
+                const result = await pool.query('SELECT * FROM users');
+                return res.status(200).json(usersToSafeDTO(result.rows));
+            }
+            if (table === 'shops') {
+                const result = await pool.query('SELECT * FROM shops');
+                return res.status(200).json(shopsToDTO(result.rows));
+            }
+            if (table === 'products') {
+                const result = await pool.query('SELECT * FROM products');
+                return res.status(200).json(productsToDTO(result.rows));
+            }
+            if (table === 'carts') {
+                const result = await pool.query('SELECT * FROM carts');
+                return res.status(200).json(cartsToDTO(result.rows));
+            }
+            if (table === 'orders') {
+                const result = await pool.query('SELECT * FROM orders');
+                return res.status(200).json(ordersToDTO(result.rows));
+            }
+            if (table === 'orders_archive') {
+                const result = await pool.query('SELECT * FROM orders_archive');
+                return res.status(200).json(ordersToDTO(result.rows));
+            }
+            if (table === 'pickup_points') {
+                const result = await pool.query('SELECT * FROM pickup_points');
+                return res.status(200).json(result.rows.map(r => r.name));
+            }
+            if (table === 'banned_users') {
+                const result = await pool.query('SELECT * FROM banned_users');
+                return res.status(200).json(result.rows.map(b => b.username));
+            }
+            if (table === 'rules') {
+                const result = await pool.query('SELECT * FROM rules ORDER BY sort_order');
+                return res.status(200).json(result.rows.map(r => r.rule_text));
+            }
+            if (table === 'wishlist') {
+                const result = await pool.query('SELECT * FROM wishlist');
                 return res.status(200).json(result.rows);
+            }
+            if (table === 'balances') {
+                const result = await pool.query('SELECT * FROM balances');
+                return res.status(200).json(balancesToDTO(result.rows));
             }
             const result = await pool.query(`SELECT * FROM ${table}`);
             return res.status(200).json(result.rows);
@@ -398,7 +635,7 @@ export default async function handler(req, res) {
 
         if (action === 'getAll') {
             const [users, shops, products, carts, orders, pickupPoints, bannedUsers, rules, wishlist, balances, transactions, pendingCommissions, withdrawRequests] = await Promise.all([
-                pool.query('SELECT username, role, shop_id, approved, pending, blocked FROM users'),
+                pool.query('SELECT * FROM users'),
                 pool.query('SELECT * FROM shops'),
                 pool.query('SELECT * FROM products'),
                 pool.query('SELECT * FROM carts'),
@@ -412,7 +649,8 @@ export default async function handler(req, res) {
                 pool.query('SELECT * FROM pending_commissions'),
                 pool.query('SELECT * FROM withdraw_requests ORDER BY created_at DESC'),
             ]);
-            return res.status(200).json({
+            
+            const rawData = {
                 users: users.rows,
                 shops: shops.rows,
                 products: products.rows,
@@ -425,8 +663,10 @@ export default async function handler(req, res) {
                 balances: balances.rows,
                 transactions: transactions.rows,
                 pendingCommissions: pendingCommissions.rows,
-                withdrawRequests: withdrawRequests.rows,
-            });
+                withdrawRequests: withdrawRequests.rows
+            };
+            
+            return res.status(200).json(getAllSafeDTO(rawData));
         }
 
         if (action === 'getSellerProfile') {
@@ -453,12 +693,12 @@ export default async function handler(req, res) {
             }, 0);
 
             return res.status(200).json({
-                shop: shopRes.rows[0] || null,
-                products: productsRes.rows,
+                shop: shopRes.rows[0] ? shopToDTO(shopRes.rows[0]) : null,
+                products: productsToDTO(productsRes.rows),
                 balance: balanceRes.rows[0]?.balance || 0,
-                orders: ordersRes.rows,
-                transactions: transactionsRes.rows,
-                user: userRes.rows[0] || null,
+                orders: ordersToDTO(ordersRes.rows),
+                transactions: transactionsToDTO(transactionsRes.rows),
+                user: userRes.rows[0] ? userToSafeDTO(userRes.rows[0]) : null,
                 pendingCommission: pendingRes.rows[0]?.amount || 0,
                 stats: {
                     totalProducts: products.length,
@@ -481,18 +721,96 @@ export default async function handler(req, res) {
 
             const completedOrders = ordersRes.rows.filter(o => o.status === 'completed');
             const totalDeliveries = completedOrders.length;
-            const totalCommission = completedOrders.reduce((sum, o) => sum + 1, 0);
+            const totalCommission = completedOrders.reduce((sum) => sum + 1, 0);
 
             return res.status(200).json({
                 balance: balanceRes.rows[0]?.balance || 0,
-                orders: ordersRes.rows,
-                transactions: transactionsRes.rows,
-                user: userRes.rows[0] || null,
+                orders: ordersToDTO(ordersRes.rows),
+                transactions: transactionsToDTO(transactionsRes.rows),
+                user: userRes.rows[0] ? userToSafeDTO(userRes.rows[0]) : null,
                 stats: {
                     totalDeliveries: totalDeliveries,
                     totalCommission: totalCommission
                 }
             });
+        }
+
+        if (action === 'register') {
+            const { username, password, role } = data || {};
+            
+            if (!username || !password) {
+                return res.status(400).json({ error: 'Username and password required' });
+            }
+            
+            if (!['buyer', 'seller'].includes(role)) {
+                return res.status(400).json({ error: 'Invalid role. Allowed: buyer, seller' });
+            }
+            
+            const existing = await pool.query('SELECT username FROM users WHERE username = $1', [username]);
+            if (existing.rows.length > 0) {
+                return res.status(400).json({ error: 'Username already exists' });
+            }
+            
+            const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+            const approved = role === 'buyer' ? true : false;
+            const pending = role === 'seller' ? true : false;
+            
+            await pool.query(
+                `INSERT INTO users (username, password, role, approved, pending, blocked)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [username, hashedPassword, role, approved, pending, false]
+            );
+            
+            const newUser = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+            
+            return res.status(200).json({
+                success: true,
+                user: userToSafeDTO(newUser.rows[0])
+            });
+        }
+
+        if (action === 'login') {
+            const { username, password } = data || {};
+            
+            if (!username || !password) {
+                return res.status(400).json({ error: 'Username and password required' });
+            }
+            
+            const userRes = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+            if (userRes.rows.length === 0) {
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+            
+            const user = userRes.rows[0];
+            const validPassword = await bcrypt.compare(password, user.password);
+            
+            if (!validPassword) {
+                return res.status(401).json({ error: 'Invalid credentials' });
+            }
+            
+            const banned = await pool.query('SELECT username FROM banned_users WHERE username = $1', [username]);
+            if (banned.rows.length > 0) {
+                return res.status(403).json({ error: 'User is blocked' });
+            }
+            
+            return res.status(200).json({
+                success: true,
+                user: userToSafeDTO(user)
+            });
+        }
+
+        if (action === 'changePassword') {
+            const { username, newPassword, actor } = data || {};
+            if (!username || !newPassword || !actor) {
+                return res.status(400).json({ error: 'username, newPassword и actor обязательны' });
+            }
+            const actorRes = await pool.query('SELECT role FROM users WHERE username = $1', [actor]);
+            if (actorRes.rows[0]?.role !== 'admin') {
+                return res.status(403).json({ error: 'Только администратор может менять пароли' });
+            }
+            const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+            await pool.query('UPDATE users SET password = $1 WHERE username = $2', [hashedPassword, username]);
+            return res.status(200).json({ success: true });
         }
 
         if (action === 'forceDeductCommission') {
@@ -557,7 +875,7 @@ export default async function handler(req, res) {
             const result = await pool.query(
                 `SELECT * FROM withdraw_requests ORDER BY created_at DESC`
             );
-            return res.status(200).json(result.rows);
+            return res.status(200).json(withdrawRequestsToDTO(result.rows));
         }
 
         if (action === 'processWithdrawRequest') {
@@ -574,7 +892,7 @@ export default async function handler(req, res) {
                 await client.query('BEGIN');
                 const result = await processWithdrawRequest(client, requestId, actor);
                 await client.query('COMMIT');
-                return res.status(200).json({ success: true, request: result });
+                return res.status(200).json({ success: true, request: withdrawRequestToDTO(result) });
             } catch (err) {
                 await client.query('ROLLBACK');
                 return res.status(400).json({ error: err.message });
@@ -597,7 +915,7 @@ export default async function handler(req, res) {
                 await client.query('BEGIN');
                 const result = await cancelWithdrawRequest(client, requestId, actor);
                 await client.query('COMMIT');
-                return res.status(200).json({ success: true, request: result });
+                return res.status(200).json({ success: true, request: withdrawRequestToDTO(result) });
             } catch (err) {
                 await client.query('ROLLBACK');
                 return res.status(400).json({ error: err.message });
@@ -606,26 +924,13 @@ export default async function handler(req, res) {
             }
         }
 
-        if (action === 'changePassword') {
-            const { username, newPassword, actor } = data || {};
-            if (!username || !newPassword || !actor) {
-                return res.status(400).json({ error: 'username, newPassword и actor обязательны' });
-            }
-            const actorRes = await pool.query('SELECT role FROM users WHERE username = $1', [actor]);
-            if (actorRes.rows[0]?.role !== 'admin') {
-                return res.status(403).json({ error: 'Только администратор может менять пароли' });
-            }
-            await pool.query('UPDATE users SET password = $1 WHERE username = $2', [newPassword, username]);
-            return res.status(200).json({ success: true });
-        }
-
         if (action === 'createAdminSession') {
-            const { username } = data || {};
+            const { username, ip } = data || {};
             if (!username) return res.status(400).json({ error: 'username required' });
             const token = crypto.randomUUID();
             await pool.query(
                 `INSERT INTO admin_sessions (username, token, ip, created_at) VALUES ($1, $2, $3, NOW())`,
-                [username, token, requestIp]
+                [username, token, ip || 'unknown']
             );
             return res.status(200).json({ token });
         }
@@ -656,7 +961,11 @@ export default async function handler(req, res) {
                 if (!grouped[order.pickup]) grouped[order.pickup] = [];
                 grouped[order.pickup].push(order);
             }
-            return res.status(200).json({ grouped, total: result.rows.length });
+            const safeGrouped = {};
+            for (const [pickup, orders] of Object.entries(grouped)) {
+                safeGrouped[pickup] = ordersToDTO(orders);
+            }
+            return res.status(200).json({ grouped: safeGrouped, total: result.rows.length });
         }
 
         if (action === 'getStaffOrders') {
@@ -668,7 +977,11 @@ export default async function handler(req, res) {
                 if (!grouped[order.pickup]) grouped[order.pickup] = [];
                 grouped[order.pickup].push(order);
             }
-            return res.status(200).json({ grouped, total: result.rows.length });
+            const safeGrouped = {};
+            for (const [pickup, orders] of Object.entries(grouped)) {
+                safeGrouped[pickup] = ordersToDTO(orders);
+            }
+            return res.status(200).json({ grouped: safeGrouped, total: result.rows.length });
         }
 
         if (action === 'updateOrderStatus') {
@@ -694,7 +1007,7 @@ export default async function handler(req, res) {
                 }
                 const order = orderRes.rows[0];
 
-                const actorRes = await client.query('SELECT role FROM users WHERE username = $1', [actor]);
+                const actorRes = await pool.query('SELECT role FROM users WHERE username = $1', [actor]);
                 if (actorRes.rows.length === 0) {
                     await client.query('ROLLBACK');
                     return res.status(404).json({ error: 'Пользователь не найден' });
@@ -1122,53 +1435,21 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        if (action === 'login') {
-            const { username, password } = data || {};
-            if (!username || !password) {
-                return res.status(400).json({ error: 'username и password обязательны' });
-            }
-            const result = await pool.query(
-                'SELECT username, password, role, shop_id, approved, pending, blocked FROM users WHERE username = $1',
-                [username]
-            );
-            if (result.rowCount === 0 || result.rows[0].password !== password) {
-                return res.status(401).json({ error: 'Неверный логин или пароль' });
-            }
-            const { password: _unused, ...safeUser } = result.rows[0];
-            return res.status(200).json({ success: true, user: safeUser });
-        }
-
-        if (action === 'register') {
-            const { username, password, role, shop_id, approved, pending, blocked } = data || {};
-            if (!username || !password || !role) {
-                return res.status(400).json({ error: 'username, password и role обязательны' });
-            }
-            const result = await pool.query(
-                `INSERT INTO users (username, password, role, shop_id, approved, pending, blocked)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                 ON CONFLICT (username) DO NOTHING
-                 RETURNING username, role, shop_id, approved, pending, blocked`,
-                [username, password, role, shop_id || null, approved || false, pending || false, blocked || false]
-            );
-            if (result.rowCount === 0) {
-                return res.status(409).json({ error: 'Пользователь с таким логином уже существует' });
-            }
-            return res.status(200).json({ success: true, user: result.rows[0] });
-        }
-
         if (action === 'set') {
             if (table === 'users') {
                 for (const user of data) {
+                    const hashedPassword = await bcrypt.hash(user.password, SALT_ROUNDS);
                     await pool.query(
                         `INSERT INTO users (username, password, role, shop_id, approved, pending, blocked)
-                         VALUES ($1, COALESCE($2, ''), $3, $4, $5, $6, $7)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7)
                          ON CONFLICT (username) DO UPDATE SET
+                             password = EXCLUDED.password,
                              role = EXCLUDED.role,
                              shop_id = EXCLUDED.shop_id,
                              approved = EXCLUDED.approved,
                              pending = EXCLUDED.pending,
                              blocked = EXCLUDED.blocked`,
-                        [user.username, user.password || null, user.role, user.shop_id || null, user.approved || false, user.pending || false, user.blocked || false]
+                        [user.username, hashedPassword, user.role, user.shop_id || null, user.approved || false, user.pending || false, user.blocked || false]
                     );
                 }
             }
