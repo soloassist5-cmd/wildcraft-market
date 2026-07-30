@@ -8,9 +8,6 @@ const pool = new Pool({
     connectionTimeoutMillis: 2000,
 });
 
-// ============================================================
-// КОНСТАНТЫ
-// ============================================================
 const ADMIN_USERNAME = 'Admin';
 const COMMISSION_PERCENT = 10;
 
@@ -28,11 +25,7 @@ async function ensureSchema() {
         pending BOOLEAN DEFAULT FALSE,
         blocked BOOLEAN DEFAULT FALSE
     )`);
-    // IP фиксируется один раз при регистрации (см. ниже, в 'set'→'users') —
-    // серверная сторона, а не то, что прислал клиент, иначе значение легко
-    // подделать. Добавляем колонку отдельно на случай, если таблица users
-    // уже существовала до этого изменения.
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ip TEXT`);
+    await pool.query(`ALTER TABLE users DROP COLUMN IF EXISTS ip`);
 
     await pool.query(`CREATE TABLE IF NOT EXISTS shops (
         id TEXT PRIMARY KEY,
@@ -169,13 +162,19 @@ async function ensureSchema() {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_withdraw_requests_seller ON withdraw_requests(seller)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_withdraw_requests_status ON withdraw_requests(status)`);
 
+    await pool.query(
+        `INSERT INTO users (username, password, role, shop_id, approved, pending, blocked)
+         VALUES
+            ('Admin', 'Admin2026!', 'admin', NULL, TRUE, FALSE, FALSE),
+            ('staff', 'Staff2026!', 'staff', NULL, TRUE, FALSE, FALSE),
+            ('courier', 'Courier2026!', 'courier', NULL, TRUE, FALSE, FALSE)
+         ON CONFLICT (username) DO NOTHING`
+    );
+
     schemaReady = true;
     console.log('✅ Схема БД инициализирована');
 }
 
-// ============================================================
-// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-// ============================================================
 async function adjustBalance(client, username, delta) {
     await client.query(
         `INSERT INTO balances (username, balance) VALUES ($1, $2)
@@ -216,9 +215,6 @@ async function deleteAllReferencingRows(client, referencedTable, referencedColum
     }
 }
 
-// ============================================================
-// КОМИССИЯ: ДОБАВИТЬ НАКОПЛЕНИЕ
-// ============================================================
 async function addPendingCommission(client, seller, amount) {
     await client.query(
         `INSERT INTO pending_commissions (seller, amount) VALUES ($1, $2)
@@ -227,9 +223,6 @@ async function addPendingCommission(client, seller, amount) {
     );
 }
 
-// ============================================================
-// КОМИССИЯ: ПРОВЕРИТЬ И СПИСАТЬ (ЕСЛИ НАКОПЛЕНО >= 10% ОТ БАЛАНСА)
-// ============================================================
 async function processPendingCommission(client, seller) {
     const [pendingRes, balanceRes] = await Promise.all([
         client.query('SELECT amount FROM pending_commissions WHERE seller = $1 FOR UPDATE', [seller]),
@@ -241,7 +234,6 @@ async function processPendingCommission(client, seller) {
     const pendingAmount = Number(pendingRes.rows[0].amount);
     const currentBalance = Number(balanceRes.rows[0]?.balance || 0);
 
-    // 10% от баланса
     const threshold = Math.floor(currentBalance * COMMISSION_PERCENT / 100);
 
     if (pendingAmount < threshold || pendingAmount === 0) return 0;
@@ -271,9 +263,6 @@ async function processPendingCommission(client, seller) {
     return toDeduct;
 }
 
-// ============================================================
-// КОМИССИЯ: РУЧНОЕ СПИСАНИЕ (АДМИН) — МОЖЕТ УЙТИ В МИНУС
-// ============================================================
 async function forceDeductCommission(client, seller, amount, actor) {
     const pendingRes = await client.query(
         'SELECT amount FROM pending_commissions WHERE seller = $1 FOR UPDATE',
@@ -307,9 +296,6 @@ async function forceDeductCommission(client, seller, amount, actor) {
     return toDeduct;
 }
 
-// ============================================================
-// ВЫВОД СРЕДСТВ — СОЗДАНИЕ ЗАЯВКИ
-// ============================================================
 async function createWithdrawRequest(client, seller, amount, pickup) {
     await client.query(
         `INSERT INTO withdraw_requests (seller, amount, pickup, status, created_at)
@@ -318,9 +304,6 @@ async function createWithdrawRequest(client, seller, amount, pickup) {
     );
 }
 
-// ============================================================
-// ПОДТВЕРЖДЕНИЕ ВЫВОДА СРЕДСТВ (STAFF/ADMIN)
-// ============================================================
 async function processWithdrawRequest(client, requestId, actor) {
     const reqRes = await client.query(
         `SELECT * FROM withdraw_requests WHERE id = $1 AND status = 'pending' FOR UPDATE`,
@@ -352,9 +335,6 @@ async function processWithdrawRequest(client, requestId, actor) {
     return req;
 }
 
-// ============================================================
-// ОТМЕНА ЗАЯВКИ НА ВЫВОД (STAFF/ADMIN)
-// ============================================================
 async function cancelWithdrawRequest(client, requestId, actor) {
     const reqRes = await client.query(
         `SELECT * FROM withdraw_requests WHERE id = $1 AND status = 'pending' FOR UPDATE`,
@@ -372,9 +352,6 @@ async function cancelWithdrawRequest(client, requestId, actor) {
     return reqRes.rows[0];
 }
 
-// ============================================================
-// ОСНОВНОЙ ОБРАБОТЧИК
-// ============================================================
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
@@ -392,17 +369,12 @@ export default async function handler(req, res) {
         await ensureSchema();
         const { action, table, data, id } = req.body;
 
-        // Реальный IP клиента — из заголовка, который проставляет сама
-        // Vercel (x-forwarded-for: <клиент>, <прокси1>, ...), первый
-        // элемент — настоящий IP браузера. НЕ берём IP от клиента напрямую
-        // (это тривиально подделать), только из заголовков запроса.
         const requestIp = (
             (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '')
         ).toString().split(',')[0].trim() || 'unknown';
 
         console.log('📥 Запрос:', action, table, id);
 
-        // ===== GET =====
         if (action === 'get') {
             if (table === 'transactions') {
                 const result = await pool.query('SELECT * FROM transactions ORDER BY created_at DESC LIMIT 500');
@@ -416,14 +388,17 @@ export default async function handler(req, res) {
                 const result = await pool.query('SELECT * FROM withdraw_requests ORDER BY created_at DESC');
                 return res.status(200).json(result.rows);
             }
+            if (table === 'users') {
+                const result = await pool.query('SELECT username, role, shop_id, approved, pending, blocked FROM users');
+                return res.status(200).json(result.rows);
+            }
             const result = await pool.query(`SELECT * FROM ${table}`);
             return res.status(200).json(result.rows);
         }
 
-        // ===== GET ALL =====
         if (action === 'getAll') {
             const [users, shops, products, carts, orders, pickupPoints, bannedUsers, rules, wishlist, balances, transactions, pendingCommissions, withdrawRequests] = await Promise.all([
-                pool.query('SELECT * FROM users'),
+                pool.query('SELECT username, role, shop_id, approved, pending, blocked FROM users'),
                 pool.query('SELECT * FROM shops'),
                 pool.query('SELECT * FROM products'),
                 pool.query('SELECT * FROM carts'),
@@ -454,7 +429,6 @@ export default async function handler(req, res) {
             });
         }
 
-        // ===== ПОЛНЫЙ ПРОФИЛЬ ПРОДАВЦА =====
         if (action === 'getSellerProfile') {
             const { username } = data || {};
             if (!username) return res.status(400).json({ error: 'Username required' });
@@ -494,7 +468,6 @@ export default async function handler(req, res) {
             });
         }
 
-        // ===== ПОЛНЫЙ ПРОФИЛЬ КУРЬЕРА =====
         if (action === 'getCourierProfile') {
             const { username } = data || {};
             if (!username) return res.status(400).json({ error: 'Username required' });
@@ -522,7 +495,6 @@ export default async function handler(req, res) {
             });
         }
 
-        // ===== РУЧНОЕ СПИСАНИЕ КОМИССИИ (АДМИН) =====
         if (action === 'forceDeductCommission') {
             const { seller, amount, actor } = data || {};
             if (!seller || !amount || !actor) {
@@ -550,7 +522,6 @@ export default async function handler(req, res) {
             }
         }
 
-        // ===== ВЫВОД СРЕДСТВ — СОЗДАНИЕ ЗАЯВКИ =====
         if (action === 'withdrawBalance') {
             const { username, amount, pickup } = data || {};
             const amt = Math.floor(Number(amount));
@@ -582,7 +553,6 @@ export default async function handler(req, res) {
             }
         }
 
-        // ===== ПОЛУЧИТЬ ЗАЯВКИ НА ВЫВОД =====
         if (action === 'getWithdrawRequests') {
             const result = await pool.query(
                 `SELECT * FROM withdraw_requests ORDER BY created_at DESC`
@@ -590,7 +560,6 @@ export default async function handler(req, res) {
             return res.status(200).json(result.rows);
         }
 
-        // ===== ПОДТВЕРДИТЬ ЗАЯВКУ НА ВЫВОД (STAFF/ADMIN) =====
         if (action === 'processWithdrawRequest') {
             const { requestId, actor } = data || {};
             if (!requestId || !actor) {
@@ -614,7 +583,6 @@ export default async function handler(req, res) {
             }
         }
 
-        // ===== ОТМЕНИТЬ ЗАЯВКУ НА ВЫВОД (STAFF/ADMIN) =====
         if (action === 'cancelWithdrawRequest') {
             const { requestId, actor } = data || {};
             if (!requestId || !actor) {
@@ -638,7 +606,6 @@ export default async function handler(req, res) {
             }
         }
 
-        // ===== СМЕНА ПАРОЛЯ =====
         if (action === 'changePassword') {
             const { username, newPassword, actor } = data || {};
             if (!username || !newPassword || !actor) {
@@ -652,14 +619,13 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // ===== СЕССИИ АДМИНА =====
         if (action === 'createAdminSession') {
-            const { username, ip } = data || {};
+            const { username } = data || {};
             if (!username) return res.status(400).json({ error: 'username required' });
             const token = crypto.randomUUID();
             await pool.query(
                 `INSERT INTO admin_sessions (username, token, ip, created_at) VALUES ($1, $2, $3, NOW())`,
-                [username, token, ip || 'unknown']
+                [username, token, requestIp]
             );
             return res.status(200).json({ token });
         }
@@ -681,7 +647,6 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // ===== ЗАКАЗЫ ДЛЯ КУРЬЕРА =====
         if (action === 'getCourierOrders') {
             const result = await pool.query(
                 `SELECT * FROM orders WHERE status = 'ready_for_courier' ORDER BY pickup, created_at`
@@ -694,7 +659,6 @@ export default async function handler(req, res) {
             return res.status(200).json({ grouped, total: result.rows.length });
         }
 
-        // ===== ЗАКАЗЫ ДЛЯ СОТРУДНИКА ПВЗ =====
         if (action === 'getStaffOrders') {
             const result = await pool.query(
                 `SELECT * FROM orders WHERE status = 'ready_for_pickup' ORDER BY pickup, created_at`
@@ -707,7 +671,6 @@ export default async function handler(req, res) {
             return res.status(200).json({ grouped, total: result.rows.length });
         }
 
-        // ===== ОБНОВЛЕНИЕ СТАТУСА ЗАКАЗА =====
         if (action === 'updateOrderStatus') {
             const orderId = id;
             const { actor, status } = data || {};
@@ -813,11 +776,9 @@ export default async function handler(req, res) {
                             await logTransaction(client, order.buyer, 'purchase', -orderTotal, `Оплата заказа #${orderId} при получении`);
                         }
 
-                        // Начисляем продавцу
                         await adjustBalance(client, order.seller, orderTotal);
                         await logTransaction(client, order.seller, 'sale', orderTotal, `Продажа заказа #${orderId}`);
 
-                        // НАКАПЛИВАЕМ КОМИССИЮ
                         const commission = Math.ceil(orderTotal * COMMISSION_PERCENT / 100);
                         if (commission > 0) {
                             await addPendingCommission(client, order.seller, commission);
@@ -826,7 +787,6 @@ export default async function handler(req, res) {
                             await processPendingCommission(client, order.seller);
                         }
 
-                        // Курьер получает 1 АР
                         if (order.courier) {
                             await adjustBalance(client, order.courier, 1);
                             await logTransaction(client, order.courier, 'delivery_fee', 1,
@@ -835,7 +795,6 @@ export default async function handler(req, res) {
 
                         await client.query(`UPDATE orders SET delivered_at = NOW() WHERE id = $1`, [orderId]);
 
-                        // АРХИВАЦИЯ
                         await client.query(
                             `INSERT INTO orders_archive (
                                 id, buyer, seller, items, total_ar, total_diamonds, currency, pickup, status, payment_method, created_at, archived_at
@@ -874,7 +833,6 @@ export default async function handler(req, res) {
                             await adjustBalance(client, order.buyer, Number(order.total_ar));
                             await logTransaction(client, order.buyer, 'refund', Number(order.total_ar), `Возврат за отменённый заказ #${orderId}`);
                         }
-                        // АРХИВАЦИЯ ОТМЕНЁННОГО
                         await client.query(
                             `INSERT INTO orders_archive (
                                 id, buyer, seller, items, total_ar, total_diamonds, currency, pickup, status, payment_method, created_at, archived_at
@@ -896,7 +854,6 @@ export default async function handler(req, res) {
             }
         }
 
-        // ===== ОФОРМЛЕНИЕ ЗАКАЗА =====
         if (action === 'placeOrder') {
             const { buyer, items, pickup, currency, paymentMethod } = data || {};
             if (!buyer || !Array.isArray(items) || items.length === 0 || !pickup) {
@@ -975,7 +932,6 @@ export default async function handler(req, res) {
                     await logTransaction(client, buyer, 'purchase', -totalAll, `Оплата заказа(ов): ${createdOrders.join(', ')}`);
                 }
 
-                // НАКАПЛИВАЕМ КОМИССИЮ ДЛЯ КАЖДОГО ПРОДАВЦА
                 for (const seller of Object.keys(grouped)) {
                     const sellerItems = grouped[seller];
                     const sellerTotal = sellerItems.reduce((s, it) => s + it.priceAR * it.quantity, 0);
@@ -1000,7 +956,6 @@ export default async function handler(req, res) {
             }
         }
 
-        // ===== АРХИВАЦИЯ СТАРЫХ ЗАКАЗОВ =====
         if (action === 'archiveOrders') {
             const client = await pool.connect();
             try {
@@ -1027,7 +982,6 @@ export default async function handler(req, res) {
             }
         }
 
-        // ===== ПОПОЛНЕНИЕ БАЛАНСА =====
         if (action === 'topUpBalance') {
             const { username, amount, actor } = data || {};
             const amt = Math.floor(Number(amount));
@@ -1049,7 +1003,6 @@ export default async function handler(req, res) {
                 await adjustBalance(client, username, amt);
                 await logTransaction(client, username, 'topup', amt, `Пополнение через ${actorRole === 'admin' ? 'администратора' : 'ПВЗ'} (${actor})`);
 
-                // После пополнения проверяем комиссию для продавца
                 const userRes = await client.query('SELECT role FROM users WHERE username = $1', [username]);
                 if (userRes.rows[0]?.role === 'seller') {
                     await processPendingCommission(client, username);
@@ -1065,7 +1018,6 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // ===== ПЕРЕВОД =====
         if (action === 'transferBalance') {
             const { from, to, amount } = data || {};
             const amt = Math.floor(Number(amount));
@@ -1093,7 +1045,6 @@ export default async function handler(req, res) {
                 await logTransaction(client, from, 'transfer_out', -amt, `Перевод пользователю ${to}`);
                 await logTransaction(client, to, 'transfer_in', amt, `Перевод от ${from}`);
 
-                // Проверяем комиссию у отправителя (если он продавец)
                 const fromUserRes = await client.query('SELECT role FROM users WHERE username = $1', [from]);
                 if (fromUserRes.rows[0]?.role === 'seller') {
                     await processPendingCommission(client, from);
@@ -1109,7 +1060,6 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // ===== БЛОКИРОВКА =====
         if (action === 'toggleBlockUser') {
             const { username, blocked } = data || {};
             if (!username) {
@@ -1139,7 +1089,6 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // ===== ОБНУЛЕНИЕ БАЛАНСА =====
         if (action === 'adminResetBalance') {
             const { username, actor } = data || {};
             if (!username || !actor) {
@@ -1173,26 +1122,53 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // ===== SET =====
+        if (action === 'login') {
+            const { username, password } = data || {};
+            if (!username || !password) {
+                return res.status(400).json({ error: 'username и password обязательны' });
+            }
+            const result = await pool.query(
+                'SELECT username, password, role, shop_id, approved, pending, blocked FROM users WHERE username = $1',
+                [username]
+            );
+            if (result.rowCount === 0 || result.rows[0].password !== password) {
+                return res.status(401).json({ error: 'Неверный логин или пароль' });
+            }
+            const { password: _unused, ...safeUser } = result.rows[0];
+            return res.status(200).json({ success: true, user: safeUser });
+        }
+
+        if (action === 'register') {
+            const { username, password, role, shop_id, approved, pending, blocked } = data || {};
+            if (!username || !password || !role) {
+                return res.status(400).json({ error: 'username, password и role обязательны' });
+            }
+            const result = await pool.query(
+                `INSERT INTO users (username, password, role, shop_id, approved, pending, blocked)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                 ON CONFLICT (username) DO NOTHING
+                 RETURNING username, role, shop_id, approved, pending, blocked`,
+                [username, password, role, shop_id || null, approved || false, pending || false, blocked || false]
+            );
+            if (result.rowCount === 0) {
+                return res.status(409).json({ error: 'Пользователь с таким логином уже существует' });
+            }
+            return res.status(200).json({ success: true, user: result.rows[0] });
+        }
+
         if (action === 'set') {
             if (table === 'users') {
                 for (const user of data) {
                     await pool.query(
-                        `INSERT INTO users (username, password, role, shop_id, approved, pending, blocked, ip)
-                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                        `INSERT INTO users (username, password, role, shop_id, approved, pending, blocked)
+                         VALUES ($1, COALESCE($2, ''), $3, $4, $5, $6, $7)
                          ON CONFLICT (username) DO UPDATE SET
-                             password = EXCLUDED.password,
                              role = EXCLUDED.role,
                              shop_id = EXCLUDED.shop_id,
                              approved = EXCLUDED.approved,
                              pending = EXCLUDED.pending,
                              blocked = EXCLUDED.blocked`,
-                        // ip намеренно НЕ в SET выше — значение фиксируется
-                        // только при первом INSERT (регистрации) и не
-                        // перезаписывается IP администратора при
-                        // последующих bulk-обновлениях этого же пользователя
-                        // (например, при одобрении магазина).
-                        [user.username, user.password, user.role, user.shop_id || null, user.approved || false, user.pending || false, user.blocked || false, requestIp]
+                        [user.username, user.password || null, user.role, user.shop_id || null, user.approved || false, user.pending || false, user.blocked || false]
                     );
                 }
             }
@@ -1298,7 +1274,6 @@ export default async function handler(req, res) {
             return res.status(200).json({ success: true });
         }
 
-        // ===== DELETE =====
         if (action === 'delete') {
             if (table === 'products') {
                 await pool.query('DELETE FROM products WHERE id = $1', [id]);
