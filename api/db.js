@@ -1146,13 +1146,11 @@ export default async function handler(req, res) {
                 return res.status(400).json({ error: 'username, password и role обязательны' });
             }
 
-            // 🔒 ЗАЩИТА: ТОЛЬКО ПОКУПАТЕЛЬ ИЛИ ПРОДАВЕЦ!
             const allowedRoles = ['buyer', 'seller'];
             if (!allowedRoles.includes(role)) {
                 return res.status(403).json({ error: 'Недопустимая роль. Доступны: buyer, seller' });
             }
 
-            // Защита от создания admin через API
             if (role === 'admin' || role === 'staff' || role === 'courier') {
                 return res.status(403).json({ error: 'Создание административных аккаунтов запрещено' });
             }
@@ -1303,8 +1301,13 @@ export default async function handler(req, res) {
                 const client = await pool.connect();
                 try {
                     await client.query('BEGIN');
+                    await client.query('DELETE FROM carts WHERE user_id = $1', [id]);
+                    await client.query('DELETE FROM wishlist WHERE user_id = $1', [id]);
                     await client.query('DELETE FROM pending_commissions WHERE seller = $1', [id]);
                     await client.query('DELETE FROM withdraw_requests WHERE seller = $1', [id]);
+                    await client.query('DELETE FROM balances WHERE username = $1', [id]);
+                    await client.query('DELETE FROM transactions WHERE username = $1', [id]);
+                    await client.query('DELETE FROM admin_sessions WHERE username = $1', [id]);
                     await client.query('DELETE FROM users WHERE username = $1', [id]);
                     await client.query('COMMIT');
                 } catch (err) {
